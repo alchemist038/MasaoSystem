@@ -1,0 +1,2 @@
+﻿python_path=C:\Users\alche\AppData\Local\Programs\Python\Python314\python.exe
+python_version=Python 3.14.3

@@ -1,0 +1,29 @@
+{
+  "warehouse_root": "E:\\masaos_mov",
+  "event_queue": "data\\event_queue_legacy_reprocess.jsonl",
+  "logs_dir": "logs",
+  "ffmpeg": "ffmpeg",
+  "ffprobe": "ffprobe",
+  "stability_check_seconds": 1,
+  "analyze": {
+    "dy_th": 3.0,
+    "min_len": 4,
+    "pre_sec": 3,
+    "seg_len": 15,
+    "max_event": 60,
+    "gap": 60,
+    "op": 180,
+    "ed": 180,
+    "jpg_q": 2
+  },
+  "enqueue": {
+    "y_count": 3,
+    "a_count": 3,
+    "start_y": "07:00",
+    "start_a": "19:00",
+    "pitch_y": 4.0,
+    "pitch_a": 4.0,
+    "days_back": 14,
+    "seed": 42
+  }
+}

@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+
+.env
+.env.*
+!.env.example
+
+logs/
+tmp/
+ss/
+
+data/*.jsonl
+!data/.gitkeep
+

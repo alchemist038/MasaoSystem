@@ -1,0 +1,19 @@
+﻿# Python cache
+__pycache__/
+*.pyc
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+.env.win
+
+# Runtime/output artifacts
+data/
+logs/
+ss/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/

@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Local secrets / env
+.env
+.env.*
+!.env.example
+current/**/.env.win
+shared/keys/
+shared/prompts/
+shared/models/
+shared/bgm/
+next/**/prompts/
+next/**/assets/bgm/
+
+# Local machine configs
+current/**/config.json
+next/**/config.json
+
+# Runtime artifacts
+current/**/data/
+current/**/logs/
+current/**/ss/
+next/**/data/
+next/**/logs/
+next/**/ss/
+current/**/execution_log.txt
+current/**/output.txt
+current/**/UNLISTED_VIDEOS_*.md
+next/**/execution_log.txt
+next/**/output.txt
+*.bak_*
+
+# Non-public or placeholder areas
+legacy/
+research/
+archive/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
