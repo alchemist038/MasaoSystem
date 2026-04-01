@@ -1,11 +1,18 @@
 ﻿# バッチ投稿ランブック（UI運用・改修なし）
 
-最終更新: 2026-03-01  
-対象: `D:\OBS\REC\scripts\youtube\yolo\WIN\ui\app.py`
+最終更新: 2026-04-01  
+対象: `D:\MasaoSystem\current\daily_ops_win\shorts_win\ui\app.py`
 
 ## 目的
 - 同じ投稿作業を毎回ブレずに実行するための手順書。
 - 「候補選定 -> JPEG/文面確認 -> 除外 -> 再補充 -> 投稿」を再現可能にする。
+- `API2` は残しつつ、title / description は必要に応じて `Codex` が介入して整える。
+
+## 文面運用方針
+- 基本は `API2で下書き -> Codexで確認 -> 必要なら修正`
+- 緊急時は `API2のみ` で流してよい
+- 品質優先時は `Codex手動` で `decision.json` を差し替えてよい
+- 共通方針は `D:\MasaoSystem\docs\current\METADATA_INTERVENTION_POLICY_2026-04-01.md`
 
 ## 今回の標準条件（テンプレ）
 - 本数: `12本`
@@ -44,6 +51,8 @@
 4. JPEG/decision確認
    - 画像: `events/<event_name>/images_review/review_00s.jpg ... review_15s.jpg`
    - 文面: `events/<event_name>/api/v*/decision.json`
+   - 標準: API2 が作った文面を Codex が確認し、必要なら `decision.json` を上書き
+   - 手動強化: API2 を使わず、Codex が先に文面を決めてから進行してよい
 5. 除外判定
    - NGがあれば除外し、同じ時刻枠へ再補充
 6. `アップロード`
@@ -63,8 +72,13 @@
 - JPEG確認シート: `WIN/data/batch_YYYYMMDD_review_sheet.jpg`
 - 文面確認結果: `WIN/data/batch_YYYYMMDD_decision_review.json`
 
+## metadata モード
+- 標準: `API2あり + Codex review`
+- 退避: `API2のみ`
+- 手動強化: `API2なし + Codex手動`
+- 指定がなければ標準を使う
+
 ## 依頼テンプレ（次回用）
 以下をそのまま伝える:
 
-`4日間12本。02:00/06:00はmotion50帯、22:00はmotion80以上。hits20以上、20秒。JPEGとtitle/descriptionを確認し、顔がはっきり映るもの・不自然なものを除外。除外分は再ピックして同時刻に補充して投稿。`
-
+`4日間12本。JPEGとtitle/descriptionを確認し、顔がはっきり映るもの・不自然なものを除外。API2は残したまま、文面は必要ならCodexが介入して修正。除外分は再ピックして同時刻に補充して投稿。`

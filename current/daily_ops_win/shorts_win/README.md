@@ -25,6 +25,12 @@ Existing scripts under project root were not modified.
 - `approve`
 - `defer` -> writes to `deferred_queue`
 - `reject` -> writes to `rejected_queue`
+4. Metadata can run in three modes:
+- `API2 + Codex review` (recommended)
+- `API2 only` (fallback)
+- `Codex manual` (`decision.json` override / `--no-api`)
+
+See `D:\MasaoSystem\docs\current\METADATA_INTERVENTION_POLICY_2026-04-01.md` for the operating policy.
 
 ## Setup
 
