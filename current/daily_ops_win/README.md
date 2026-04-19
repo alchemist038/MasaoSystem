@@ -7,7 +7,7 @@ This folder groups the two Windows lines used most often.
   - flow: candidate / motion -> local YOLO crop -> API2 -> render -> upload
 - `post_publish`
   - the post-publish maintenance line
-  - used for updates after upload
+  - used for updates after upload, manual single uploads, and digest posting records
 
 Positioning:
 
