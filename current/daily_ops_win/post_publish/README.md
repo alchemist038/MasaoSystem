@@ -10,6 +10,11 @@ This folder currently covers:
 - manual single-video uploads for digest posts
 - per-digest posting records
 
+Digest upload rule:
+
+- For normal digest releases, the final upload master should target `1920x1080`.
+- Draft or proxy review outputs may use lower resolution, but the publish-ready master should be `1080p` when the source and render path allow it.
+
 Main files:
 
 - `update_shorts.py`
