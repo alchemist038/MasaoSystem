@@ -62,6 +62,10 @@ GitHub 公開を前提に、
 
 - `D:\OBS\REC\scripts\youtube\yolo\WIN`
 - `D:\OBS\REC\work`
+- `D:\OBS\REC\overlays\masao_room_sensor`
+  - SwitchBot Hub / Cloud API room temperature OBS overlay
+  - Git copy: `D:\MasaoSystem\current\daily_ops_win\live_overlays\masao_room_sensor`
+  - Do not use the old BLE periodic watcher during live operation
 
 ### next
 

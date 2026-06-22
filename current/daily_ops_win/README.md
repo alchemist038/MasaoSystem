@@ -8,6 +8,10 @@ This folder groups the two Windows lines used most often.
 - `post_publish`
   - the post-publish maintenance line
   - used for updates after upload, manual single uploads, and digest posting records
+- `live_overlays`
+  - small OBS browser overlays and low-load live display helpers
+  - production copy is deployed under `D:\OBS\REC\overlays`
+  - excludes live data such as `sensor-data.json` and `sensor-data.js`
 
 Positioning:
 

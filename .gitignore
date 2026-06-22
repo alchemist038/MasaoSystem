@@ -23,6 +23,8 @@ next/**/config.json
 current/**/data/
 current/**/logs/
 current/**/ss/
+current/**/sensor-data.json
+current/**/sensor-data.js
 next/**/data/
 next/**/logs/
 next/**/ss/

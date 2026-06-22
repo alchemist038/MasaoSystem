@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Masao Room Sensor</title>
+  <style>
+    :root {
+      --sensor-font-size: 24px;
+      --sensor-bg: rgba(19, 24, 27, 0.72);
+      --sensor-text: #fbfff5;
+      --sensor-muted: rgba(255, 255, 255, 0.64);
+      --sensor-accent: #8ee6b4;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: transparent;
+      font-family: "Yu Gothic", "Yu Gothic UI", "Meiryo", "Hiragino Sans", system-ui, sans-serif;
+    }
+
+    body.preview {
+      background: linear-gradient(180deg, #839aa4 0%, #d7ecec 55%, #b7d2de 100%);
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .badge {
+      position: absolute;
+      right: var(--right-offset, 18px);
+      bottom: var(--bottom-offset, 82px);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 246px;
+      max-width: calc(100vw - 36px);
+      height: 46px;
+      padding: 0 16px 0 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 8px;
+      background: var(--sensor-bg);
+      color: var(--sensor-text);
+      box-shadow:
+        0 3px 12px rgba(0, 0, 0, 0.22),
+        inset 0 1px 0 rgba(255, 255, 255, 0.10);
+      font-size: var(--sensor-font-size);
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: 0;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.52);
+      white-space: nowrap;
+    }
+
+    .badge::before {
+      content: "";
+      width: 5px;
+      align-self: stretch;
+      margin-left: -14px;
+      background: var(--sensor-accent);
+      opacity: 0.86;
+    }
+
+    .label {
+      flex: 0 0 auto;
+      color: #eafff2;
+      font-size: 0.72em;
+      font-weight: 700;
+    }
+
+    .value {
+      flex: 0 0 auto;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .separator {
+      color: var(--sensor-muted);
+      font-weight: 600;
+    }
+
+    .meta {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      color: var(--sensor-muted);
+      font-size: 0.58em;
+      text-overflow: ellipsis;
+    }
+
+    .badge.stale {
+      --sensor-accent: #ffd27a;
+      --sensor-bg: rgba(60, 58, 49, 0.78);
+      border-color: rgba(255, 210, 122, 0.42);
+      animation: stalePulse 2.8s ease-in-out infinite;
+    }
+
+    .badge.temp-caution {
+      --sensor-accent: #ffd15c;
+      --sensor-bg: rgba(82, 65, 22, 0.78);
+      --sensor-text: #fff9e8;
+      border-color: rgba(255, 209, 92, 0.44);
+    }
+
+    .badge.temp-danger {
+      --sensor-accent: #ff6a5e;
+      --sensor-bg: rgba(90, 26, 24, 0.84);
+      --sensor-text: #fff4f1;
+      border-color: rgba(255, 106, 94, 0.58);
+      animation: dangerPulse 1.8s ease-in-out infinite;
+    }
+
+    .badge.compact {
+      min-width: 212px;
+      height: 40px;
+      padding-right: 13px;
+      font-size: calc(var(--sensor-font-size) - 3px);
+    }
+
+    body[data-position="top-right"] .badge {
+      top: 18px;
+      bottom: auto;
+    }
+
+    body[data-position="top-left"] .badge {
+      top: 18px;
+      right: auto;
+      left: 18px;
+      bottom: auto;
+    }
+
+    body[data-position="bottom-left"] .badge {
+      right: auto;
+      left: 18px;
+    }
+
+    @keyframes dangerPulse {
+      0%,
+      100% {
+        box-shadow:
+          0 3px 12px rgba(0, 0, 0, 0.22),
+          inset 0 1px 0 rgba(255, 255, 255, 0.10);
+      }
+      50% {
+        box-shadow:
+          0 3px 16px rgba(255, 71, 58, 0.38),
+          0 0 10px rgba(255, 71, 58, 0.28),
+          inset 0 1px 0 rgba(255, 255, 255, 0.16);
+      }
+    }
+
+    @keyframes stalePulse {
+      0%,
+      100% {
+        opacity: 0.96;
+      }
+      50% {
+        opacity: 0.82;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay" aria-hidden="true">
+    <div class="badge" id="badge">
+      <span class="label" id="label">まさお部屋</span>
+      <span class="value" id="temperature">--.-℃</span>
+      <span class="separator">/</span>
+      <span class="value" id="humidity">--%</span>
+      <span class="meta" id="meta">更新待ち</span>
+    </div>
+  </div>
+
+  <script src="./sensor-config.js"></script>
+  <script src="./sensor-data.js"></script>
+  <script>
+    (() => {
+      const DEFAULT_CONFIG = {
+        label: "まさお部屋",
+        timeZone: "Asia/Tokyo",
+        position: "bottom-right",
+        bottomOffsetPx: 82,
+        rightOffsetPx: 18,
+        dataRefreshSeconds: 15,
+        staleAfterSeconds: 2700,
+        temperatureCautionOnC: 23.5,
+        temperatureCautionOffC: 23.0,
+        temperatureDangerOnC: 25.5,
+        temperatureDangerOffC: 24.5,
+        baseFontSize: 24,
+        compact: false
+      };
+
+      const DEFAULT_DATA = {
+        temperatureC: null,
+        humidity: null,
+        battery: null,
+        rssi: null,
+        updatedAt: null,
+        source: "not_updated"
+      };
+
+      const elements = {
+        badge: document.getElementById("badge"),
+        label: document.getElementById("label"),
+        temperature: document.getElementById("temperature"),
+        humidity: document.getElementById("humidity"),
+        meta: document.getElementById("meta")
+      };
+
+      const params = new URLSearchParams(window.location.search);
+      let temperatureAlertState = "normal";
+
+      function settings() {
+        const config = { ...DEFAULT_CONFIG, ...(window.MASAO_ROOM_SENSOR_CONFIG || {}) };
+        if (params.has("position")) config.position = params.get("position");
+        if (params.has("label")) config.label = params.get("label");
+        if (params.has("bottom")) config.bottomOffsetPx = Number(params.get("bottom"));
+        if (params.has("right")) config.rightOffsetPx = Number(params.get("right"));
+        if (params.has("font")) config.baseFontSize = Number(params.get("font"));
+        if (params.has("compact")) config.compact = true;
+        if (params.has("preview")) document.body.classList.add("preview");
+        return config;
+      }
+
+      function data() {
+        return { ...DEFAULT_DATA, ...(window.MASAO_ROOM_SENSOR_DATA || {}) };
+      }
+
+      function formatTemperature(value) {
+        const number = Number(value);
+        return Number.isFinite(number) ? `${number.toFixed(1)}℃` : "--.-℃";
+      }
+
+      function formatHumidity(value) {
+        const number = Number(value);
+        return Number.isFinite(number) ? `${Math.round(number)}%` : "--%";
+      }
+
+      function secondsSince(value) {
+        if (!value) return Infinity;
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return Infinity;
+        return Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+      }
+
+      function formatMeta(payload, ageSeconds) {
+        if (!Number.isFinite(ageSeconds)) return "更新待ち";
+        if (ageSeconds >= 3600) return `${Math.floor(ageSeconds / 3600)}時間前`;
+        if (ageSeconds >= 60) return `${Math.floor(ageSeconds / 60)}分前`;
+        if (Number.isFinite(Number(payload.battery))) return `電池${Math.round(Number(payload.battery))}%`;
+        return "BLE";
+      }
+
+      function temperatureAlertClass(payload, config, stale) {
+        const temperature = Number(payload.temperatureC);
+        if (stale || !Number.isFinite(temperature)) {
+          temperatureAlertState = "normal";
+          return "";
+        }
+
+        const cautionOn = Number(config.temperatureCautionOnC);
+        const cautionOff = Number(config.temperatureCautionOffC);
+        const dangerOn = Number(config.temperatureDangerOnC);
+        const dangerOff = Number(config.temperatureDangerOffC);
+
+        if (temperatureAlertState === "danger") {
+          if (temperature < dangerOff) {
+            temperatureAlertState = temperature >= cautionOff ? "caution" : "normal";
+          }
+        } else if (temperatureAlertState === "caution") {
+          if (temperature >= dangerOn) {
+            temperatureAlertState = "danger";
+          } else if (temperature < cautionOff) {
+            temperatureAlertState = "normal";
+          }
+        } else if (temperature >= dangerOn) {
+          temperatureAlertState = "danger";
+        } else if (temperature >= cautionOn) {
+          temperatureAlertState = "caution";
+        }
+
+        if (temperatureAlertState === "danger") return "temp-danger";
+        if (temperatureAlertState === "caution") return "temp-caution";
+        return "";
+      }
+
+      function applyLayout(config) {
+        document.body.dataset.position = config.position || DEFAULT_CONFIG.position;
+        elements.badge.style.setProperty("--bottom-offset", `${Number(config.bottomOffsetPx) || 82}px`);
+        elements.badge.style.setProperty("--right-offset", `${Number(config.rightOffsetPx) || 18}px`);
+        elements.badge.style.setProperty("--sensor-font-size", `${Number(config.baseFontSize) || 24}px`);
+        elements.badge.classList.toggle("compact", !!config.compact);
+      }
+
+      function render() {
+        const config = settings();
+        const payload = data();
+        const ageSeconds = secondsSince(payload.updatedAt);
+        const stale = ageSeconds > Number(config.staleAfterSeconds || DEFAULT_CONFIG.staleAfterSeconds);
+        const alertClass = temperatureAlertClass(payload, config, stale);
+
+        applyLayout(config);
+        elements.badge.classList.toggle("stale", stale);
+        elements.badge.classList.toggle("temp-caution", alertClass === "temp-caution");
+        elements.badge.classList.toggle("temp-danger", alertClass === "temp-danger");
+        elements.label.textContent = config.label || DEFAULT_CONFIG.label;
+        elements.temperature.textContent = formatTemperature(payload.temperatureC);
+        elements.humidity.textContent = formatHumidity(payload.humidity);
+        elements.meta.textContent = stale ? `更新${formatMeta(payload, ageSeconds)}` : formatMeta(payload, ageSeconds);
+      }
+
+      function reloadData() {
+        const script = document.createElement("script");
+        script.src = `./sensor-data.js?v=${Date.now()}`;
+        script.async = true;
+        script.onload = () => {
+          script.remove();
+          render();
+        };
+        script.onerror = () => script.remove();
+        document.head.appendChild(script);
+      }
+
+      render();
+      const refreshSeconds = Number(settings().dataRefreshSeconds) || 15;
+      setInterval(render, 1000);
+      setInterval(reloadData, Math.max(5, refreshSeconds) * 1000);
+    })();
+  </script>
+</body>
+</html>
