@@ -35,6 +35,13 @@ next/**/execution_log.txt
 next/**/output.txt
 *.bak_*
 
+# Live ops local/runtime-only files
+current/daily_ops_win/live_ops/**/broadcasts_*.json
+current/daily_ops_win/live_ops/**/*.local.json
+current/daily_ops_win/live_ops/**/*.secret.*
+current/daily_ops_win/live_ops/**/*token*
+current/daily_ops_win/live_ops/**/*key*
+
 # Non-public or placeholder areas
 legacy/
 research/
