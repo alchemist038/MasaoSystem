@@ -5,6 +5,8 @@ SwitchBot 温湿度計ProをOBSブラウザソースへ表示する。
 2026-06-22以降の本番更新は、PCのBluetoothを使わないSwitchBot Hub / Cloud API方式。
 BLE直接取得は調査・非常時用として残す。
 
+朝配信準備では、OBS / PTZ / Bouyomi / スケジュール監視と同じ正規起動対象として扱う。
+
 運用正本:
 
 ```text
@@ -50,6 +52,8 @@ C:\Users\alche\Desktop\OBS\venvs\switchbot_ble\Scripts\python.exe C:\Users\alche
 ## 常時更新
 
 現在の本番起動は、Bluetoothマウス/イヤホンへの影響を避けるためHub / Cloud APIで60秒ごとに更新する。
+配信準備時はこのHubウォッチャーを起動し、値と更新時刻を最終報告に含める。
+ログやデータの書き込み先であるDドライブが一時的に準備不可になっても、ウォッチャーは終了せず次の周期で再試行する。
 
 ```powershell
 D:\OBS\REC\overlays\masao_room_sensor\start_room_sensor_hub_watch.ps1

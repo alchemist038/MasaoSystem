@@ -10,6 +10,26 @@ $out = Join-Path $logDir 'masao_room_sensor_hub_watch.out.log'
 $err = Join-Path $logDir 'masao_room_sensor_hub_watch.err.log'
 $period = if ($env:MASAO_ROOM_SENSOR_HUB_PERIOD) { [double]$env:MASAO_ROOM_SENSOR_HUB_PERIOD } else { 60.0 }
 
+function Write-LauncherLog {
+    param(
+        [string]$Level,
+        [string]$Message
+    )
+    $line = "[$(Get-Date -Format o)] [$Level] $Message"
+    try {
+        New-Item -ItemType Directory -Force -Path $logDir -ErrorAction Stop | Out-Null
+        $target = if ($Level -eq 'WARN') { $err } else { $out }
+        $line | Out-File -FilePath $target -Append -Encoding utf8 -ErrorAction Stop
+    } catch {
+        try {
+            [Console]::Error.WriteLine("[room-sensor-launcher-log-write-failed] $($_.Exception.Message)")
+            [Console]::Error.WriteLine($line)
+        } catch {
+            # Ignore logging failures. The watcher should survive temporary D: I/O loss.
+        }
+    }
+}
+
 function Import-UserSecretEnv {
     param([string]$Name)
     if (-not [Environment]::GetEnvironmentVariable($Name, 'Process')) {
@@ -26,7 +46,11 @@ function Import-UserSecretEnv {
 Import-UserSecretEnv 'SWITCHBOT_TOKEN'
 Import-UserSecretEnv 'SWITCHBOT_SECRET'
 $env:PYTHONUNBUFFERED = '1'
-New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+try {
+    New-Item -ItemType Directory -Force -Path $logDir -ErrorAction Stop | Out-Null
+} catch {
+    Write-LauncherLog 'WARN' "log directory is temporarily unavailable: $($_.Exception.Message)"
+}
 
 if (-not $env:SWITCHBOT_TOKEN -or -not $env:SWITCHBOT_SECRET) {
     throw 'SWITCHBOT_TOKEN or SWITCHBOT_SECRET is not set'
@@ -44,12 +68,16 @@ $existing = Get-CimInstance Win32_Process |
     }
 foreach ($process in $existing) {
     try {
+        if (-not (Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue)) {
+            Write-LauncherLog 'INFO' "existing room sensor watcher already exited pid=$($process.ProcessId)"
+            continue
+        }
         Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop
-        "[$(Get-Date -Format o)] [INFO] stopped existing room sensor watcher pid=$($process.ProcessId)" | Out-File -FilePath $out -Append -Encoding utf8
+        Write-LauncherLog 'INFO' "stopped existing room sensor watcher pid=$($process.ProcessId)"
     } catch {
-        "[$(Get-Date -Format o)] [WARN] failed to stop existing room sensor watcher pid=$($process.ProcessId): $($_.Exception.Message)" | Out-File -FilePath $err -Append -Encoding utf8
+        Write-LauncherLog 'WARN' "failed to stop existing room sensor watcher pid=$($process.ProcessId): $($_.Exception.Message)"
     }
 }
 
-"[$(Get-Date -Format o)] [INFO] launching hub room sensor watcher period=$period" | Out-File -FilePath $out -Append -Encoding utf8
-& $python -3 $updater --periodic --period $period 1>> $out 2>> $err
+Write-LauncherLog 'INFO' "launching hub room sensor watcher period=$period"
+& $python -3 $updater --periodic --period $period

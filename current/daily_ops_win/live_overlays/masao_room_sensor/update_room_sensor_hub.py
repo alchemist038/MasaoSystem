@@ -49,10 +49,13 @@ def now_jst() -> datetime:
 
 
 def log_line(level: str, message: str) -> None:
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
     line = f"[{now_jst().isoformat(timespec='seconds')}] [{level}] {message}"
-    with (LOG_DIR / f"masao_room_sensor_hub_{now_jst():%Y-%m-%d}.log").open("a", encoding="utf-8") as file:
-        file.write(line + "\n")
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        with (LOG_DIR / f"masao_room_sensor_hub_{now_jst():%Y-%m-%d}.log").open("a", encoding="utf-8") as file:
+            file.write(line + "\n")
+    except OSError as error:
+        print(f"[room-sensor-log-write-failed] {error}", file=sys.stderr, flush=True)
     print(line, flush=True)
 
 

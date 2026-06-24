@@ -66,6 +66,7 @@ GitHub 公開を前提に、
   - SwitchBot Hub / Cloud API room temperature OBS overlay
   - Git copy: `D:\MasaoSystem\current\daily_ops_win\live_overlays\masao_room_sensor`
   - Do not use the old BLE periodic watcher during live operation
+  - Treat the Hub watcher as part of the normal live-prep startup set with OBS / PTZ / Bouyomi / schedule monitor
 
 ### next
 
