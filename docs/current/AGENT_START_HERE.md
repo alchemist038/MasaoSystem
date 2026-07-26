@@ -1,184 +1,78 @@
-# Agent Start Here
+# MasaoSystem Agent Start Here
 
-更新日: 2026-03-28
+Updated: 2026-07-10
+Status: current
 
-## 1. この文書の役割
+This is the repository entry point. It is intentionally short.
 
-次回このワークスペースで作業を始める人やエージェントが、
-最短で全体像をつかみ、危険な誤整理を避けながら再構築を進めるための開始点です。
+## Required Reads
 
-この文書は要約版です。
-詳細は下の正本文書を参照します。
+1. `D:\MD\context\AGENT_START_HERE.md`
+2. `D:\MD\context\projects\masao\AGENT_START_HERE.md`
+3. `D:\MasaoSystem\docs\current\ABSOLUTE_RULES.md`
+4. `D:\MasaoSystem\docs\current\CURRENT_OPERATIONS.md`
+5. `D:\MasaoSystem\docs\current\SYSTEM_COMPONENT_MAP.md`
+6. Only the task-specific runbook.
 
-## 2. 最初に読む順番
-
-1. `D:\OBS\REC\GITHUB_PUBLIC_RELEASE_GOAL_20260328.md`
-2. `D:\OBS\REC\REBUILD_MASTER_PLAN_20260327.md`
-3. `D:\OBS\REC\CODEX_WORKING_RULES.md`
-4. `D:\OBS\REC\SYSTEM_FULL_INVENTORY_20260327.md`
-5. `D:\OBS\REC\SESSION_LOG.md`
-6. `D:\OBS\REC\PROJECT_SUMMARY_20260327.md`
-7. `D:\OBS\REC\PROJECT_STATUS_20260327.md`
-8. `D:\OBS\REC\scripts\youtube\yolo\WIN\UPLOAD_RUNBOOK.md`
-9. `D:\OBS\REC\work\UPDATE_SHORTS_RUNBOOK.md`
-
-必要に応じて読む文書:
-
-- `D:\MD\masao\yolo_youtube_360_dy_relation.md`
-- `D:\MD\masao\masao_ptz_v4_spec_20260307.md`
-- `D:\MD\masao\masao_chatbot.md`
-- `D:\MD\pc_back\MASAO_WINDOWS_REBUILD_ACTION_GUIDELINE_FINAL_2026-02-28.md`
-
-## 3. このシステムの正しい見方
-
-これは 1 本のコードツリーではありません。
-次の層に分けて理解します。
-
-- `C:` = hot runtime
-- `D:` = control plane
-- `D:\MD` = knowledge base
-- `E:` = warehouse
-- `Z:` = remote runtime
-
-## 3.5 最上位の公開目標
-
-今後の最上位目標は、
-GitHub 公開を前提に、
-低スペック環境でも動く自動処理パイプラインの構成と思想を公開できる形へ整理することです。
-
-そのため、以後の整理は
-
-- README 主役
-- 設計重視
-- 実運用構造の抽出
-- 機密の除外
-- 公開用最小構成
-
-を優先します。
-
-## 4. 現在の本線
-
-### current
-
-- `D:\OBS\REC\scripts\youtube\yolo\WIN`
-- `D:\OBS\REC\work`
-- `D:\OBS\REC\overlays\masao_room_sensor`
-  - SwitchBot Hub / Cloud API room temperature OBS overlay
-  - Git copy: `D:\MasaoSystem\current\daily_ops_win\live_overlays\masao_room_sensor`
-  - Do not use the old BLE periodic watcher during live operation
-  - Treat the Hub watcher as part of the normal live-prep startup set with OBS / PTZ / Bouyomi / schedule monitor
-
-### next
-
-- `D:\OBS\REC\scripts\WIN_YOLO_PTZ_20S`
-
-### legacy
-
-- `D:\OBS\REC\jobs`
-- `D:\OBS\REC\scripts\active`
-- `D:\OBS\REC\scripts\core`
-- Linux 寄り `D:\OBS\REC\scripts\youtube`
-- `D:\OBS\REC\WIN`
-
-### separate runtime
-
-- PTZ: `C:\masao_ptz`
-- chat bot: `Z:\chatbot_v4`
-
-### warehouse
-
-- `E:\masaos_mov`
-
-## 5. 重要な前提
-
-- `C:` に点在しているのは偶然ではない
-- PTZ 制御は応答性のため SSD 側に置く意図がある
-- 360 化まわりも SSD 上で処理したい意図がある
-- それ以外はできるだけ `D:` に寄せる方針だった
-- `E:\masaos_mov` は単なる RAW 置き場ではなく、巨大なセッション倉庫
-- `Z:\chatbot_v4` は別マシン runtime の本線
-
-## 6. 壊してはいけないもの
-
-- current の入口
-  - `D:\OBS\REC\scripts\youtube\yolo\WIN\UPLOAD_RUNBOOK.md`
-  - `D:\OBS\REC\work\UPDATE_SHORTS_RUNBOOK.md`
-- `E:\masaos_mov` の session 構造
-- queue 名と artifact の互換性
-- `.published`
-- event 名の形
-- token / key の参照先
-- `C:\masao_ptz` と `Z:\chatbot_v4` の独立性
-
-## 7. やってはいけないこと
-
-- いきなり current を移動する
-- いきなり legacy を削除する
-- `C:\masao_ptz` を shorts 本線の下へ吸収する
-- `Z:\chatbot_v4` を `REC` の一部として混ぜる
-- `E:\masaos_mov` を新基準フォルダへ丸ごとコピーする
-- current と next の queue を混在させる
-
-## 8. 次に安全に始める作業
-
-1. GitHub 公開版の README 目次を先に作る
-2. 公開対象と除外対象を決める
-3. GitHub 公開版の別ディレクトリを作る
-4. 公開版の最小フォルダ構成を定義する
-5. sample data / mock config の方針を決める
-6. その後に必要な current の複製を行う
-7. 新基準側だけで動作確認する
-8. 安定後に legacy を archive 化する
-
-## 9. 新しい基準構造
+Agent ownership and task routing:
 
 ```text
-D:\MasaoSystem
-  current
-    daily_ops_win
-      shorts_win
-      post_publish
-    historical_reprocess_win
-  next
-    shorts_ptz_win
-  legacy
-    linux_shared
-    old_win_bridge
-  shared
-    keys
-    prompts
-    bgm
-    models
-  docs
-    current
-    design
-    migration
-  research
-    yolo_training
-    dataset_build
-    experiments
-  archive
-    backups
-    trash
-    old_logs
+D:\MasaoSystem\docs\current\AGENT_ROUTING.md
 ```
 
-## 10. 迷ったときの判断基準
+Content and platform policy:
 
-- 速度が重要で常駐するか
-  - なら `C:` 寄り
-- 日常運用の制御か
-  - なら `D:` 寄り
-- 文書か
-  - なら `D:\MD`
-- 大容量セッションデータか
-  - なら `E:\masaos_mov`
-- 別マシン runtime か
-  - なら `Z:`
+```text
+D:\MasaoSystem\docs\current\CONTENT_AND_SNS_POLICY.md
+```
 
-## 11. 次回作業の最初のゴール
+## Current Operating Summary
 
-最初のゴールは「ローカル整理そのもの」ではなく、
-GitHub 公開版の README 骨子と最小構成を先に定義することです。
+- Live/OBS/PTZ/fallback/sensor operations continue.
+- Protect Part 3 night/dinner Live.
+- Kodeko routine video publishing is paused.
+- Taro Selection video publishing is paused.
+- Live chatbot Taro remains a separate component.
+- Regular-video routine publishing is paused.
+- Main-channel YouTube Shorts continue morning/evening; the hideout experiment targets one daily post at 20:00 JST.
+- X, TikTok, Instagram, SNS inventory, and agreed Drive/local delivery continue lightly.
 
-その後に、必要なローカル複製や移行作業へ入ります。
+## Absolute Safety Summary
+
+- RAW media is immutable.
+- Copy source material to `D:\OBS\REC\work` before editing.
+- Do not rename, move, delete, or reorganize warehouse sessions.
+- Existing approved sidecar jobs may add only their known analysis artifacts without modifying RAW.
+- Do not expose secrets.
+- Do not perform YouTube/SNS writes without the required authorization.
+- Do not start i5-owned scripts from this PC.
+- Do not deploy or restart production components casually during a stream.
+
+The full rules in `ABSOLUTE_RULES.md` override older notes.
+
+## Repository Role
+
+`D:\MasaoSystem` stores intended, reviewable source and documentation.
+Runtime may exist under `C:` or `D:\OBS\REC`.
+A source edit is not a deployment.
+
+Before a runtime change:
+
+1. Identify the component and runtime owner.
+2. Compare source and runtime.
+3. Agree on the final state and rollback.
+4. Deploy at a safe time.
+5. Verify the deployed state.
+
+## Current and Historical Material
+
+- Standing policy belongs under `docs\current`.
+- Historical detail belongs in Git history, `docs\archive`, or the context vault.
+- Do not append daily analysis to this file.
+- Do not delete old material merely because it is not active.
+
+Archive index:
+
+```text
+D:\MasaoSystem\docs\archive\ARCHIVE_INDEX.md
+```
