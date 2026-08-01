@@ -16,6 +16,7 @@ from googleapiclient.discovery import build
 
 
 SCOPES = ["https://www.googleapis.com/auth/youtube"]
+DEFAULT_TOKEN_PATH = Path(r"D:\MasaoSystem\shared\keys\youtube\token.json")
 PART_ORDER = ("part1", "part2", "part3")
 
 
@@ -193,9 +194,7 @@ def main() -> None:
     args = parser.parse_args()
 
     token_value = os.environ.get("MASAO_YOUTUBE_LIVE_TOKEN_FILE", "").strip()
-    if not token_value:
-        raise SystemExit("MASAO_YOUTUBE_LIVE_TOKEN_FILE is required.")
-    token_path = Path(token_value)
+    token_path = Path(token_value) if token_value else DEFAULT_TOKEN_PATH
     if not token_path.exists():
         raise SystemExit(f"YouTube token file was not found: {token_path}")
 

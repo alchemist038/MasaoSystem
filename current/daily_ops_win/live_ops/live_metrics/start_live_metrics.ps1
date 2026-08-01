@@ -2,14 +2,18 @@ param(
   [string]$Date = (Get-Date -Format 'yyyy-MM-dd'),
   [int]$Port = 8791,
   [int]$PollSeconds = 60,
-  [string]$Python = ''
+  [string]$Python = '',
+  [string]$TokenFile = 'D:\MasaoSystem\shared\keys\youtube\token.json'
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 if ([string]::IsNullOrWhiteSpace($env:MASAO_YOUTUBE_LIVE_TOKEN_FILE)) {
-  throw 'MASAO_YOUTUBE_LIVE_TOKEN_FILE is required.'
+  if (-not (Test-Path -LiteralPath $TokenFile)) {
+    throw "YouTube Live token file was not found: $TokenFile"
+  }
+  $env:MASAO_YOUTUBE_LIVE_TOKEN_FILE = $TokenFile
 }
 
 if ([string]::IsNullOrWhiteSpace($Python)) {

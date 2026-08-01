@@ -9,7 +9,10 @@ to a local OBS browser dock.
 
 ## Start
 
-Set `MASAO_YOUTUBE_LIVE_TOKEN_FILE` to the approved local token path, then run:
+The approved local token path defaults to
+`D:\MasaoSystem\shared\keys\youtube\token.json`. Override it with
+`MASAO_YOUTUBE_LIVE_TOKEN_FILE` or `-TokenFile` only when an approved alternate
+location is required, then run:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\start_live_metrics.ps1 `
