@@ -52,12 +52,12 @@ Kodeko remains an internal role for investigation, organization, QA, and documen
 - New Live reservations created after 2026-07-15 use these public titles:
 
 ```text
-Part 1: うさぎライブ｜ミニレッキスのまさお放牧中・朝の警備 / Relaxing Rabbit Live Cam
-Part 2: うさぎライブ｜ミニレッキスのまさお放牧中・お昼寝中？ / Relaxing Rabbit Live Cam
-Part 3: うさぎライブ｜ミニレッキスのまさお放牧中・18:30ごろごはん / Relaxing Rabbit Live Cam
+Part 1: うさぎライブ｜ミニレッキスのまさお放牧中・朝の警備 / Relaxing Rabbit Live Cam YYYY.MM.DD
+Part 2: うさぎライブ｜ミニレッキスのまさお放牧中・お昼寝中？ / Relaxing Rabbit Live Cam YYYY.MM.DD
+Part 3: うさぎライブ｜ミニレッキスのまさお放牧中・18:30ごろごはん / Relaxing Rabbit Live Cam YYYY.MM.DD
 ```
 
-- Part numbers remain internal labels and description text. Do not put part numbers, dates, or hashtags in the public title.
+- Part numbers remain internal labels and description text. Append the target date as `YYYY.MM.DD`; do not add title hashtags.
 - Do not retroactively edit Live reservations that already existed on 2026-07-15.
 - All three parts use the coordinated bright thumbnail series adopted on 2026-07-15. Runtime files are `masao_thumb_part1_morning.jpg`, `masao_thumb_part2_noon.jpg`, and `masao_thumb_part3_night.jpg` under `C:\Users\alche\Desktop\OBS\サムネ` (all 1280x720 JPEG). Each image is slot-specific: morning patrol, daytime nap, and dinner around 18:30.
 - Do not redesign Live merely because Shorts distribution changes.
