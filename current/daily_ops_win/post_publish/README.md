@@ -25,8 +25,43 @@ Main files:
   - channel playlist lookup helper
 - `upload_digest_video.py`
   - single digest uploader with scheduled publish time and optional thumbnail / playlist
+- `youtube_hideout_manage.py`
+  - guarded API client for the separate `まさおの隠れ家` Shorts channel
+- `Invoke-HideoutYouTube.ps1`
+  - standard entry point that always uses the hideout-only token role and channel guard
 - `digest_posts/`
   - case records for individual digest uploads
+
+## Masao Hideout Shorts
+
+Use this entry point for every API operation targeting `まさおの隠れ家`.
+Do not inspect or fall back to the main-channel token store.
+
+```powershell
+# Token and channel preflight (read only)
+.\Invoke-HideoutYouTube.ps1 -Command status -Json
+
+# Recent uploads and schedules (read only)
+.\Invoke-HideoutYouTube.ps1 -Command list-recent -Limit 20 -Json
+
+# Inspect one video (read only)
+.\Invoke-HideoutYouTube.ps1 -Command inspect -VideoId VIDEO_ID -Json
+
+# Manifest preflight only: channel, SHA-256, schedule, and duplicate checks
+.\Invoke-HideoutYouTube.ps1 -Command upload-manifest -Manifest 'D:\path\upload_manifest.json' -Json
+
+# Upload and schedule only after explicit approval
+.\Invoke-HideoutYouTube.ps1 -Command upload-manifest -Manifest 'D:\path\upload_manifest.json' -Execute -Json
+```
+
+Fixed guards:
+
+- Expected channel: `UCIG-z7Q4rRq-cbIUJDB8SlA`
+- Token role: `D:\OBS\REC\keys\youtube_hideout\token_hideout_ops.json`
+- Main-channel token fallback: prohibited
+- Scheduled upload visibility: must start as `private`
+- Manifest SHA-256: required and verified against the video bytes
+- Recent same-title or same-`publishAt` match: blocks the upload
 
 Operational note:
 
