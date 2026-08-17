@@ -20,6 +20,11 @@ const ENDING_MUSIC_SOURCE = "エンディング音楽";
 const ENDING_MUSIC_VOLUME = numberFromEnv("ENDING_MUSIC_VOLUME", 0.09114433079957962);
 const ENDING_MUSIC_FADE_DURATION_MS = numberFromEnv("ENDING_MUSIC_FADE_DURATION_MS", 10000);
 const ENDING_MUSIC_FADE_STEPS = Math.max(1, Math.round(numberFromEnv("ENDING_MUSIC_FADE_STEPS", 20)));
+const RECORDING_POLL_MS = numberFromEnv("MASAO_RECORDING_POLL_MS", 250);
+const RECORDING_AUTO_START_GRACE_MS = numberFromEnv("MASAO_RECORDING_AUTO_START_GRACE_MS", 2000);
+const RECORDING_START_TIMEOUT_MS = numberFromEnv("MASAO_RECORDING_START_TIMEOUT_MS", 5000);
+const RECORDING_STOP_GRACE_MS = numberFromEnv("MASAO_RECORDING_STOP_GRACE_MS", 3000);
+const RECORDING_FILE_TIMEOUT_MS = numberFromEnv("MASAO_RECORDING_FILE_TIMEOUT_MS", 5000);
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -35,6 +40,108 @@ function numberFromEnv(name, fallback) {
 function log(message) {
   const stamp = new Date().toLocaleString("ja-JP", { hour12: false });
   console.log(`[${stamp}] ${message}`);
+}
+
+function recordingStatusDir() {
+  return process.env.MASAO_OBS_RECORDING_STATUS_DIR || path.resolve(__dirname, "..", "logs");
+}
+
+function recordingStatusPath(date) {
+  return path.join(recordingStatusDir(), `obs_recording_${dateKey(date)}.json`);
+}
+
+function readRecordingState(date) {
+  const file = recordingStatusPath(date);
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return { schemaVersion: 1, date: dateKey(date), parts: {} };
+    }
+    throw error;
+  }
+}
+
+function writeRecordingState(date, state) {
+  const file = recordingStatusPath(date);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const nextState = {
+    ...state,
+    schemaVersion: 1,
+    date: dateKey(date),
+    updatedAt: new Date().toISOString(),
+    parts: state.parts || {},
+  };
+  const temporary = `${file}.tmp-${process.pid}`;
+  fs.writeFileSync(temporary, `${JSON.stringify(nextState, null, 2)}\n`, "utf8");
+  fs.renameSync(temporary, file);
+  return nextState;
+}
+
+function updateRecordingPartState(part, date, patch) {
+  const state = readRecordingState(date);
+  state.parts = state.parts || {};
+  state.parts[part] = { ...(state.parts[part] || {}), ...patch };
+  return writeRecordingState(date, state).parts[part];
+}
+
+function tryUpdateRecordingPartState(part, date, patch) {
+  try {
+    return updateRecordingPartState(part, date, patch);
+  } catch (error) {
+    log(`録画確認状態の保存に失敗: ${error.message}`);
+    return null;
+  }
+}
+
+function partLabel(part) {
+  return { part1: "第1部", part2: "第2部", part3: "第3部" }[part] || part;
+}
+
+function outputPathFrom(...values) {
+  for (const value of values) {
+    if (value && typeof value.outputPath === "string" && value.outputPath.trim()) {
+      return value.outputPath.trim();
+    }
+  }
+  return "";
+}
+
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes)) return "不明";
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let value = bytes;
+  let index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index += 1;
+  }
+  return `${value.toFixed(index === 0 ? 0 : 2)} ${units[index]}`;
+}
+
+async function waitForOutputState(obs, requestType, desiredActive, timeoutMs, options = {}) {
+  const sleepFn = options.sleepFn || sleep;
+  const pollMs = options.pollMs ?? RECORDING_POLL_MS;
+  const deadline = Date.now() + timeoutMs;
+  let status = await obs.request(requestType);
+  while (!!status.outputActive !== desiredActive && Date.now() < deadline) {
+    await sleepFn(Math.max(0, Math.min(pollMs, deadline - Date.now())));
+    status = await obs.request(requestType);
+  }
+  return status;
+}
+
+async function waitForFile(outputPath, timeoutMs, options = {}) {
+  const sleepFn = options.sleepFn || sleep;
+  const pollMs = options.pollMs ?? RECORDING_POLL_MS;
+  const deadline = Date.now() + timeoutMs;
+  while (outputPath && !fs.existsSync(outputPath) && Date.now() < deadline) {
+    await sleepFn(Math.max(0, Math.min(pollMs, deadline - Date.now())));
+  }
+  if (!outputPath || !fs.existsSync(outputPath)) {
+    return { exists: false, bytes: null };
+  }
+  return { exists: true, bytes: fs.statSync(outputPath).size };
 }
 
 function obsConfigPath() {
@@ -242,8 +349,234 @@ async function startStream(date = new Date()) {
   });
 }
 
+async function ensureRecordingWithObs(obs, part, date = new Date(), options = {}) {
+  const streamStatus = await waitForOutputState(
+    obs,
+    "GetStreamStatus",
+    true,
+    options.streamTimeoutMs ?? RECORDING_START_TIMEOUT_MS,
+    options,
+  );
+  if (!streamStatus.outputActive) {
+    throw new Error(`${partLabel(part)}の配信が開始状態になっていません。`);
+  }
+
+  let recordStatus = await obs.request("GetRecordStatus");
+  if (!recordStatus.outputActive) {
+    recordStatus = await waitForOutputState(
+      obs,
+      "GetRecordStatus",
+      true,
+      options.autoStartGraceMs ?? RECORDING_AUTO_START_GRACE_MS,
+      options,
+    );
+  }
+
+  let guardStarted = false;
+  let startResponse = {};
+  if (!recordStatus.outputActive) {
+    log(`録画自動補完: ${partLabel(part)}の録画が未開始のためStartRecordを実行します。`);
+    try {
+      startResponse = await obs.request("StartRecord");
+      guardStarted = true;
+    } catch (error) {
+      const raceStatus = await obs.request("GetRecordStatus");
+      if (!raceStatus.outputActive) throw error;
+      recordStatus = raceStatus;
+      log(`録画自動補完: ${partLabel(part)}は同時刻にOBS側で開始済みでした。`);
+    }
+    recordStatus = await waitForOutputState(
+      obs,
+      "GetRecordStatus",
+      true,
+      options.startTimeoutMs ?? RECORDING_START_TIMEOUT_MS,
+      options,
+    );
+  }
+
+  if (!recordStatus.outputActive) {
+    throw new Error(`${partLabel(part)}の録画を開始できませんでした。`);
+  }
+
+  const outputPath = outputPathFrom(recordStatus, startResponse);
+  const result = {
+    streamActive: true,
+    recordingActive: true,
+    guardStarted,
+    outputPath,
+  };
+  tryUpdateRecordingPartState(part, date, {
+    label: partLabel(part),
+    startedAt: new Date().toISOString(),
+    startStatus: "ok",
+    streamActive: true,
+    recordingActive: true,
+    guardStarted,
+    outputPath,
+  });
+  log(
+    `[録画開始確認] ${partLabel(part)} 配信=OK 録画=OK 自動補完=${guardStarted ? "実行" : "不要"} RAW=${outputPath || "パス取得待ち"}`,
+  );
+  return result;
+}
+
+async function ensureRecordingForPart(part, date = new Date()) {
+  return withObs((obs) => ensureRecordingWithObs(obs, part, date));
+}
+
+async function safeEnsureRecordingForPart(part, date = new Date()) {
+  try {
+    return await ensureRecordingForPart(part, date);
+  } catch (error) {
+    tryUpdateRecordingPartState(part, date, {
+      label: partLabel(part),
+      startedAt: new Date().toISOString(),
+      startStatus: "error",
+      startError: error.message,
+    });
+    log(`[録画開始確認] ${partLabel(part)} 録画=NG - ${error.message}`);
+    return null;
+  }
+}
+
+async function finalizeRecordingWithObs(obs, part, date = new Date(), options = {}) {
+  const streamStatus = await obs.request("GetStreamStatus");
+  if (streamStatus.outputActive) {
+    throw new Error(`${partLabel(part)}はまだ配信中です。録画終了確認は配信停止後に行ってください。`);
+  }
+
+  let priorPartState = {};
+  try {
+    priorPartState = readRecordingState(date).parts?.[part] || {};
+  } catch (error) {
+    log(`録画確認状態の読み取りに失敗: ${error.message}`);
+  }
+
+  let recordStatus = await obs.request("GetRecordStatus");
+  const pathBeforeStop = outputPathFrom(recordStatus, { outputPath: options.knownOutputPath }, priorPartState);
+  if (recordStatus.outputActive) {
+    recordStatus = await waitForOutputState(
+      obs,
+      "GetRecordStatus",
+      false,
+      options.stopGraceMs ?? RECORDING_STOP_GRACE_MS,
+      options,
+    );
+  }
+
+  let stopResponse = {};
+  let guardStopped = false;
+  if (recordStatus.outputActive) {
+    log(`録画終了補完: ${partLabel(part)}の録画が継続中のためStopRecordを実行します。`);
+    stopResponse = await obs.request("StopRecord");
+    guardStopped = true;
+    recordStatus = await waitForOutputState(
+      obs,
+      "GetRecordStatus",
+      false,
+      options.stopTimeoutMs ?? RECORDING_START_TIMEOUT_MS,
+      options,
+    );
+  }
+
+  if (recordStatus.outputActive) {
+    throw new Error(`${partLabel(part)}の録画を停止できませんでした。`);
+  }
+
+  const outputPath = outputPathFrom(stopResponse, recordStatus, { outputPath: pathBeforeStop }, priorPartState);
+  const file = await waitForFile(outputPath, options.fileTimeoutMs ?? RECORDING_FILE_TIMEOUT_MS, options);
+  const endStatus = file.exists ? "ok" : "missing";
+  tryUpdateRecordingPartState(part, date, {
+    label: partLabel(part),
+    endedAt: new Date().toISOString(),
+    endStatus,
+    recordingActive: false,
+    guardStopped,
+    outputPath,
+    fileExists: file.exists,
+    fileBytes: file.bytes,
+  });
+
+  if (file.exists) {
+    log(`[録画終了確認] ${partLabel(part)} RAW=OK サイズ=${formatBytes(file.bytes)} PATH=${outputPath}`);
+  } else {
+    log(`[録画終了確認] ${partLabel(part)} RAW=NG PATH=${outputPath || "取得できませんでした"}`);
+  }
+  return { part, outputPath, fileExists: file.exists, fileBytes: file.bytes, guardStopped };
+}
+
+async function reportRecordingFileFromState(part, date = new Date(), options = {}) {
+  let priorPartState = {};
+  try {
+    priorPartState = readRecordingState(date).parts?.[part] || {};
+  } catch (error) {
+    log(`録画確認状態の読み取りに失敗: ${error.message}`);
+  }
+  const outputPath = outputPathFrom(priorPartState);
+  const file = await waitForFile(outputPath, options.fileTimeoutMs ?? RECORDING_FILE_TIMEOUT_MS, options);
+  tryUpdateRecordingPartState(part, date, {
+    label: partLabel(part),
+    endedAt: new Date().toISOString(),
+    endStatus: file.exists ? "ok" : "missing",
+    recordingActive: false,
+    outputPath,
+    fileExists: file.exists,
+    fileBytes: file.bytes,
+    obsDisconnectedAtFinalCheck: true,
+  });
+  if (file.exists) {
+    log(`[録画終了確認] ${partLabel(part)} OBS=停止済み RAW=OK サイズ=${formatBytes(file.bytes)} PATH=${outputPath}`);
+  } else {
+    log(`[録画終了確認] ${partLabel(part)} OBS=停止済み RAW=NG PATH=${outputPath || "取得できませんでした"}`);
+  }
+  return { part, outputPath, fileExists: file.exists, fileBytes: file.bytes, obsDisconnected: true };
+}
+
+function isObsConnectionError(error) {
+  return /WebSocket (open error|closed|closed before OBS responded)|ECONNREFUSED/i.test(error.message || "");
+}
+
+async function finalizeRecordingForPart(part, date = new Date()) {
+  try {
+    return await withObs((obs) => finalizeRecordingWithObs(obs, part, date));
+  } catch (error) {
+    if (!isObsConnectionError(error)) throw error;
+    log(`OBSへ接続できないため、保存済みRAWパスから終了確認します: ${error.message}`);
+    return reportRecordingFileFromState(part, date);
+  }
+}
+
 async function stopPartStream(part, date) {
-  await stopStream();
+  await withObs(async (obs) => {
+    let knownOutputPath = "";
+    try {
+      knownOutputPath = outputPathFrom(await obs.request("GetRecordStatus"));
+    } catch (error) {
+      log(`録画停止前のRAWパス取得をスキップ: ${error.message}`);
+    }
+
+    const streamStatus = await obs.request("GetStreamStatus");
+    if (streamStatus.outputActive) {
+      log("配信停止");
+      await obs.request("StopStream");
+      await waitForOutputState(obs, "GetStreamStatus", false, RECORDING_START_TIMEOUT_MS);
+    } else {
+      log("配信停止はスキップ: 配信中ではありません");
+    }
+
+    try {
+      await finalizeRecordingWithObs(obs, part, date, { knownOutputPath });
+    } catch (error) {
+      tryUpdateRecordingPartState(part, date, {
+        label: partLabel(part),
+        endedAt: new Date().toISOString(),
+        endStatus: "error",
+        endError: error.message,
+        outputPath: knownOutputPath,
+      });
+      log(`[録画終了確認] ${partLabel(part)} 録画=NG - ${error.message}`);
+    }
+  });
   await restoreEndingMusicVolume();
   completeYoutube(part, date);
 }
@@ -288,6 +621,7 @@ async function watchMorningStart(date) {
   log(`朝枠の手動開始を監視します。開始検知から15秒後に${SCENES.main}へ切り替えます。`);
   while (new Date() < deadline) {
     if (await isStreaming()) {
+      const recordingCheck = safeEnsureRecordingForPart("part1", date);
       log(`朝枠の配信開始を検知しました。15秒後に${SCENES.main}へ切り替えます。`);
       await sleep(15000);
       if (await isStreaming()) {
@@ -296,6 +630,7 @@ async function watchMorningStart(date) {
       } else {
         log(`${SCENES.main}切替はスキップ: 15秒待機中に配信が停止しました。`);
       }
+      await recordingCheck;
       return;
     }
     await sleep(2000);
@@ -330,6 +665,7 @@ async function autoStartMorning(date, clock) {
     await startStream(date);
   }
 
+  const recordingCheck = safeEnsureRecordingForPart("part1", date);
   log(`朝枠 ${SCENES.main} 切替待機: 15秒`);
   await sleep(15000);
   if (await isStreaming()) {
@@ -338,6 +674,7 @@ async function autoStartMorning(date, clock) {
   } else {
     log(`${SCENES.main}切替はスキップ: 配信中ではありません。`);
   }
+  await recordingCheck;
 }
 
 function nightProfileFor(date) {
@@ -442,13 +779,13 @@ function scheduleFor(date, mode = "full") {
     { key: "part1-ending-fade", at: timeOn(date, 11, 59, 20), label: "第1部 エンディング音楽フェードアウト", run: () => fadeOutEndingMusic() },
     { key: "part1-stop", at: timeOn(date, 11, 59, 35), label: "第1部 終了", run: () => stopPartStream("part1", date) },
     { key: "day-profile", at: timeOn(date, 11, 59, 45), label: "昼配信プロファイルへ", run: () => setProfile(PROFILES.day) },
-    { key: "part2-start", at: timeOn(date, 11, 59, 55), label: "第2部 開始/オープニング", run: async () => { await setScene(SCENES.opening); await startStream(date); } },
+    { key: "part2-start", at: timeOn(date, 11, 59, 55), label: "第2部 開始/オープニング", run: async () => { await setScene(SCENES.opening); await startStream(date); await safeEnsureRecordingForPart("part2", date); } },
     { key: "part2-main", at: timeOn(date, 12, 0, 10), label: `第2部 ${SCENES.main}`, run: () => setScene(SCENES.main) },
     { key: "part2-ending", at: timeOn(date, 16, 58, 45), label: "第2部 エンディング", run: () => setEndingScene() },
     { key: "part2-ending-fade", at: timeOn(date, 16, 59, 20), label: "第2部 エンディング音楽フェードアウト", run: () => fadeOutEndingMusic() },
     { key: "part2-stop", at: timeOn(date, 16, 59, 35), label: "第2部 終了", run: () => stopPartStream("part2", date) },
     { key: "night-profile", at: timeOn(date, 16, 59, 45), label: `夜配信プロファイルへ (${nightProfile})`, run: () => setProfile(nightProfile) },
-    { key: "part3-start", at: timeOn(date, 16, 59, 55), label: "第3部 開始/オープニング", run: async () => { await setScene(SCENES.opening); await startStream(date); } },
+    { key: "part3-start", at: timeOn(date, 16, 59, 55), label: "第3部 開始/オープニング", run: async () => { await setScene(SCENES.opening); await startStream(date); await safeEnsureRecordingForPart("part3", date); } },
     { key: "part3-main", at: timeOn(date, 17, 0, 10), label: `第3部 ${SCENES.main}`, run: () => setScene(SCENES.main) },
   ];
   return filterSchedule(events, mode);
@@ -465,13 +802,16 @@ function parseArgs() {
   const modeArg = rawArgs.find((arg) => arg.startsWith("--mode="));
   const mainSceneArg = rawArgs.find((arg) => arg.startsWith("--main-scene="));
   const morningStartArg = rawArgs.find((arg) => arg.startsWith("--morning-start="));
+  const partArg = rawArgs.find((arg) => arg.startsWith("--part="));
   return {
     dryRun: args.has("--dry-run"),
     prepareMorning: args.has("--prepare-morning"),
+    finalizeRecording: args.has("--finalize-recording"),
     date: dateArg ? dateArg.slice("--date=".length) : null,
     mode: modeArg ? modeArg.slice("--mode=".length) : "full",
     mainScene: mainSceneArg ? mainSceneArg.slice("--main-scene=".length) : process.env.MASAO_OBS_MAIN_SCENE || null,
     morningStart: morningStartArg ? morningStartArg.slice("--morning-start=".length) : null,
+    part: partArg ? partArg.slice("--part=".length) : null,
   };
 }
 
@@ -498,6 +838,29 @@ function clockFromArg(value) {
     second,
     label: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`,
   };
+}
+
+function resolveRecordingPart(requestedPart, date, now = new Date()) {
+  const validParts = new Set(["part1", "part2", "part3"]);
+  if (requestedPart) {
+    if (!validParts.has(requestedPart)) throw new Error("--part must be part1, part2, or part3.");
+    return requestedPart;
+  }
+
+  try {
+    const state = readRecordingState(date);
+    const openParts = Object.entries(state.parts || {})
+      .filter(([part, value]) => validParts.has(part) && value.startedAt && !value.endedAt)
+      .sort((left, right) => String(right[1].startedAt).localeCompare(String(left[1].startedAt)));
+    if (openParts.length > 0) return openParts[0][0];
+  } catch (error) {
+    log(`録画確認状態から部を判定できません: ${error.message}`);
+  }
+
+  if (dateKey(date) !== dateKey(now)) return "part3";
+  if (now < timeOn(date, 12, 0, 0)) return "part1";
+  if (now < timeOn(date, 17, 0, 0)) return "part2";
+  return "part3";
 }
 
 async function runSchedule(today, mode, morningStartClock = null) {
@@ -549,6 +912,14 @@ async function main() {
   if (args.mainScene) SCENES.main = args.mainScene;
   const today = dateFromArg(args.date);
   const morningStartClock = clockFromArg(args.morningStart);
+
+  if (args.finalizeRecording) {
+    const part = resolveRecordingPart(args.part, today);
+    log(`手動終了の録画確認: ${partLabel(part)}`);
+    await finalizeRecordingForPart(part, today);
+    return;
+  }
+
   const events = scheduleFor(today, args.mode);
 
   if (args.dryRun) {
@@ -571,7 +942,20 @@ async function main() {
   await runSchedule(today, args.mode, morningStartClock);
 }
 
-main().catch((error) => {
-  log(`ERROR: ${error.stack || error.message}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    log(`ERROR: ${error.stack || error.message}`);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  ensureRecordingWithObs,
+  finalizeRecordingWithObs,
+  formatBytes,
+  reportRecordingFileFromState,
+  readRecordingState,
+  recordingStatusPath,
+  resolveRecordingPart,
+  waitForOutputState,
+};
