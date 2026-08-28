@@ -48,6 +48,13 @@ def now_jst() -> datetime:
     return datetime.now(JST)
 
 
+def safe_print(*args: object, **kwargs: object) -> None:
+    try:
+        print(*args, **kwargs)
+    except (OSError, ValueError):
+        pass
+
+
 def log_line(level: str, message: str) -> None:
     line = f"[{now_jst().isoformat(timespec='seconds')}] [{level}] {message}"
     try:
@@ -55,8 +62,8 @@ def log_line(level: str, message: str) -> None:
         with (LOG_DIR / f"masao_room_sensor_hub_{now_jst():%Y-%m-%d}.log").open("a", encoding="utf-8") as file:
             file.write(line + "\n")
     except OSError as error:
-        print(f"[room-sensor-log-write-failed] {error}", file=sys.stderr, flush=True)
-    print(line, flush=True)
+        safe_print(f"[room-sensor-log-write-failed] {error}", file=sys.stderr, flush=True)
+    safe_print(line, flush=True)
 
 
 def get_secret(name: str) -> str:
