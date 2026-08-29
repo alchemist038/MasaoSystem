@@ -17,11 +17,13 @@ This copies:
 - `obs_scripts\*` to `C:\Users\alche\Desktop\OBS\scripts`
 - `fallback\*` to `C:\Users\alche\Desktop\OBS\scripts`
 
-It skips `youtube_live\youtube_live_broadcasts.py` by default. Deploy it only when the runtime token setup is confirmed:
+It skips `youtube_live\youtube_live_broadcasts.py` and the three Live thumbnails by default. Deploy them only when the runtime token setup is confirmed:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy_to_obs_scripts.ps1 -IncludeYoutubeLive
 ```
+
+With `-IncludeYoutubeLive`, the coordinated thumbnails under `youtube_live\thumbnails` are copied to the OBS sibling folder `サムネ`.
 
 The source version of `youtube_live_broadcasts.py` does not hardcode private UNC/IP token paths. It expects one of:
 

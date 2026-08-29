@@ -638,6 +638,28 @@ async function watchMorningStart(date) {
   log("朝枠の開始監視を終了しました。");
 }
 
+async function watchPart3Start(date) {
+  const deadline = timeOn(date, 23, 59, 0);
+  log(`第3部の手動開始を監視します。開始検知から15秒後に${SCENES.main}へ切り替えます。`);
+  while (new Date() < deadline) {
+    if (await isStreaming()) {
+      const recordingCheck = safeEnsureRecordingForPart("part3", date);
+      log(`第3部の配信開始を検知しました。15秒後に${SCENES.main}へ切り替えます。`);
+      await sleep(15000);
+      if (await isStreaming()) {
+        await setScene(SCENES.main);
+        log(`第3部 ${SCENES.main}へ切り替えました。`);
+      } else {
+        log(`${SCENES.main}切替はスキップ: 15秒待機中に配信が停止しました。`);
+      }
+      await recordingCheck;
+      return;
+    }
+    await sleep(2000);
+  }
+  log("第3部の開始監視を終了しました。");
+}
+
 async function autoStartMorning(date, clock) {
   const startAt = timeOn(date, clock.hour, clock.minute, clock.second);
   const deadline = timeOn(date, 11, 58, 45);
@@ -769,6 +791,16 @@ function filterSchedule(events, mode) {
     if (startIndex < 0) throw new Error(`schedule start key not found: ${startKey}`);
     return events.slice(startIndex);
   }
+  if (mode === "part2-live-to-part2-stop") {
+    const startKey = "part2-ending";
+    const stopKey = "part2-stop";
+    const startIndex = events.findIndex((event) => event.key === startKey);
+    const stopIndex = events.findIndex((event) => event.key === stopKey);
+    if (startIndex < 0 || stopIndex < startIndex) {
+      throw new Error(`schedule range not found: ${startKey}..${stopKey}`);
+    }
+    return events.slice(startIndex, stopIndex + 1);
+  }
   throw new Error(`Unknown schedule mode: ${mode}`);
 }
 
@@ -807,6 +839,7 @@ function parseArgs() {
     dryRun: args.has("--dry-run"),
     prepareMorning: args.has("--prepare-morning"),
     finalizeRecording: args.has("--finalize-recording"),
+    watchPart3Start: args.has("--watch-part3-start"),
     date: dateArg ? dateArg.slice("--date=".length) : null,
     mode: modeArg ? modeArg.slice("--mode=".length) : "full",
     mainScene: mainSceneArg ? mainSceneArg.slice("--main-scene=".length) : process.env.MASAO_OBS_MAIN_SCENE || null,
@@ -936,6 +969,11 @@ async function main() {
 
   if (args.prepareMorning) {
     await prepareMorning();
+    return;
+  }
+
+  if (args.watchPart3Start) {
+    await watchPart3Start(today);
     return;
   }
 

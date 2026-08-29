@@ -46,6 +46,8 @@ current/daily_ops_win/live_ops/**/*key*
 legacy/
 research/
 archive/
+!docs/archive/
+!docs/archive/**
 
 # OS / editor
 .DS_Store

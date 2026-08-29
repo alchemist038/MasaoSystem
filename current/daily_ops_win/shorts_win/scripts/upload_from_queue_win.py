@@ -21,39 +21,29 @@ DEFAULT_PLAYLIST_ID = "PLvSj66EpFnyfn0tMREkXv33zjDn1edic-"
 DEFAULT_TOKEN_PATH = r"D:\OBS\REC\keys\youtube\token.json"
 DEFAULT_DESCRIPTION_CONFIG = {
     "intro_lines": [
-        "A cute moment of Masao the Mini Rex rabbit 🐰",
-        "This short video is automatically generated from a live stream using AI.",
+        "ミニレッキスのうさぎ「まさお」を毎日見守る、うさぎライブカメラです。",
+        "朝・昼・夜の3部構成で、へやんぽ、ごはんタイム、ゴロン、あくび、なでなで、ブラッシングなどを配信しています。",
     ],
-    "include_time_line": True,
-    "separator": "――――――――――",
+    "include_decision_description": False,
+    "include_time_line": False,
+    "separator": "",
     "goro_lines": [
-        "プロジェクトメンバーのGPT五郎です。",
-        "このショートは、まさおのライブ配信を",
-        "AIが自動解析して切り抜いた映像です。",
-        "YOLOによる物体検出と",
-        "フレーム単位の動き指標を使って",
-        "動きのあるシーンを抽出しています。",
-        "抽出された候補の中から",
-        "約20秒のシーンを選び、",
-        "ショート動画として生成しています。",
-        "タイトルと説明文は",
-        "編集者GPT太郎が担当しています。",
-        "このプロジェクトは",
-        "まだ実験段階です。",
-        "気づいたことがあれば",
-        "ぜひコメントで教えてください。",
+        "ライブ中のかわいい瞬間は、Shortsや特集動画として紹介することがあります。",
+        "気に入ったら、ライブにもまったり遊びに来てください。",
+        "EN:",
+        "Daily rabbit live cam of Masao, a Mini Rex rabbit from Japan.",
+        "Watch relaxing Shorts, flops, yawns, naps, grooming, and dinner time.",
     ],
     "hashtags": [
-        "#shorts",
-        "#rabbit",
-        "#bunny",
-        "#minirex",
         "#うさぎ",
         "#ミニレッキス",
         "#まさお",
-        "#AI切り抜き",
-        "#自動編集",
-        "#YOLO",
+        "#うさぎライブ",
+        "#うさぎライブカメラ",
+        "#rabbit",
+        "#MiniRex",
+        "#bunny",
+        "#shorts",
     ],
 }
 
@@ -137,9 +127,14 @@ def get_description_config(conf: Dict[str, Any]) -> Dict[str, Any]:
 
     separator = raw.get("separator", DEFAULT_DESCRIPTION_CONFIG["separator"])
     include_time_line = raw.get("include_time_line", DEFAULT_DESCRIPTION_CONFIG["include_time_line"])
+    include_decision_description = raw.get(
+        "include_decision_description",
+        DEFAULT_DESCRIPTION_CONFIG["include_decision_description"],
+    )
 
     return {
         "intro_lines": [str(v).rstrip() for v in intro_lines if str(v).strip()],
+        "include_decision_description": bool(include_decision_description),
         "include_time_line": bool(include_time_line),
         "separator": str(separator).strip(),
         "goro_lines": [str(v).rstrip() for v in goro_lines if str(v).strip()],
@@ -196,10 +191,10 @@ def build_description(decision: Dict[str, Any], video_path: Path, decision_path:
 
     blocks: List[str] = []
     intro_block = "\n".join(description_conf["intro_lines"]).strip()
+    if desc and description_conf["include_decision_description"]:
+        blocks.append(desc)
     if intro_block:
         blocks.append(intro_block)
-    if desc:
-        blocks.append(desc)
     if time_line:
         blocks.append(time_line)
     goro_block = "\n".join(description_conf["goro_lines"]).strip()

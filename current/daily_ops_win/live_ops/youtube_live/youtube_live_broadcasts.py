@@ -87,6 +87,7 @@ https://note.com/glossy_shrew7501
 
 EN:
 Daily live stream of Masao, a Mini Rex rabbit from Japan.
+Masao relaxes in a free-roam space, not inside a cage.
 Watch a relaxing rabbit live cam with flops, naps, yawns, dinner time, grooming, and quiet daily moments.
 Viewer comments and timestamps may become Shorts or highlight videos.
 
@@ -102,7 +103,6 @@ def parse_clock(value: str) -> time:
 
 
 def parts_for(
-    date_label: str,
     part1_start: time,
     part2_end: time,
     part3_start: time,
@@ -111,9 +111,9 @@ def parts_for(
     return [
         Part(
             key="part1",
-            title=f"うさぎのまさお放牧中｜朝の見守り 第1部｜まさお警備中 / Rabbit Live Cam {date_label}",
+            title="うさぎライブ｜ミニレッキスのまさお放牧中・朝の警備 / Relaxing Rabbit Live Cam",
             description_intro=(
-                "ミニレッキスのうさぎ「まさお」を毎日見守る、うさぎライブカメラです。\n"
+                "ミニレッキスのうさぎ「まさお」が、ケージではない空間でのびのび過ごす様子を毎日見守る、うさぎライブカメラです。\n"
                 "朝・昼・夜の3部構成で、へやんぽ、ごはんタイム、ゴロン、寝落ち、あくび、なでなで、ブラッシングなど、まさおの自然な毎日を配信しています。\n\n"
                 "この枠は第1部です。\n"
                 "朝のまさおを、12:00ごろまでまったり見守ります。\n"
@@ -126,9 +126,9 @@ def parts_for(
         ),
         Part(
             key="part2",
-            title=f"うさぎのまさお放牧中｜昼の見守り 第2部｜まさおお昼寝？ / Rabbit Live Cam {date_label}",
+            title="うさぎライブ｜ミニレッキスのまさお放牧中・お昼寝中？ / Relaxing Rabbit Live Cam",
             description_intro=(
-                "ミニレッキスのうさぎ「まさお」を毎日見守る、うさぎライブカメラです。\n"
+                "ミニレッキスのうさぎ「まさお」が、ケージではない空間でのびのび過ごす様子を毎日見守る、うさぎライブカメラです。\n"
                 "朝・昼・夜の3部構成で、へやんぽ、ごはんタイム、ゴロン、寝落ち、あくび、なでなで、ブラッシングなど、まさおの自然な毎日を配信しています。\n\n"
                 "この枠は第2部です。\n"
                 f"昼のへやんぽや休憩中のまさおを、{part2_end.strftime('%H:%M')}ごろまで見守ります。\n"
@@ -141,9 +141,9 @@ def parts_for(
         ),
         Part(
             key="part3",
-            title=f"うさぎのまさお放牧中｜夜の見守り 第3部｜18:30ごろごはんタイム / Rabbit Live Cam {date_label}",
+            title="うさぎライブ｜ミニレッキスのまさお放牧中・18:30ごろごはん / Relaxing Rabbit Live Cam",
             description_intro=(
-                "ミニレッキスのうさぎ「まさお」を毎日見守る、うさぎライブカメラです。\n"
+                "ミニレッキスのうさぎ「まさお」が、ケージではない空間でのびのび過ごす様子を毎日見守る、うさぎライブカメラです。\n"
                 "朝・昼・夜の3部構成で、へやんぽ、ごはんタイム、ゴロン、寝落ち、あくび、なでなで、ブラッシングなど、まさおの自然な毎日を配信しています。\n\n"
                 "この枠は第3部です。\n"
                 "18:30ごろのごはんタイムを中心に、夜のまさおを見守ります。\n"
@@ -267,7 +267,7 @@ def get_stream_key(service, stream_id: str) -> str:
 def broadcast_body(part: Part, day: datetime, privacy: str) -> dict[str, Any]:
     return {
         "snippet": {
-            "title": part.title,
+            "title": f"{part.title} {day.strftime('%Y.%m.%d')}",
             "description": part.description_intro + COMMON_DESCRIPTION,
             "scheduledStartTime": iso_at(day, part.start),
             "scheduledEndTime": iso_at(day, part.end),
@@ -281,7 +281,7 @@ def broadcast_body(part: Part, day: datetime, privacy: str) -> dict[str, Any]:
             "enableAutoStop": False,
             "enableDvr": True,
             "recordFromStart": True,
-            "latencyPreference": "normal",
+            "latencyPreference": "low" if part.key == "part3" else "normal",
             "monitorStream": {
                 "enableMonitorStream": False,
             },
@@ -306,7 +306,6 @@ def set_thumbnail_with_retry(service, broadcast_id: str, thumbnail: Path, retrie
 
 def create_broadcasts(args: argparse.Namespace) -> None:
     day = parse_date(args.date)
-    date_label = day.strftime("%Y.%m.%d")
     part1_start = parse_clock(args.part1_start)
     part2_end = parse_clock(args.part2_end)
     part3_start = parse_clock(args.part3_start)
@@ -314,7 +313,7 @@ def create_broadcasts(args: argparse.Namespace) -> None:
     selected_parts = parse_parts(args.parts)
     parts = [
         part
-        for part in parts_for(date_label, part1_start, part2_end, part3_start, part3_end)
+        for part in parts_for(part1_start, part2_end, part3_start, part3_end)
         if part.key in selected_parts
     ]
     out = manifest_path(day)

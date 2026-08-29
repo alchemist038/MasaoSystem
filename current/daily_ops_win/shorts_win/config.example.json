@@ -23,39 +23,29 @@
   "route": "yolo_win",
   "description": {
     "intro_lines": [
-      "A cute moment of Masao the Mini Rex rabbit 🐰",
-      "This short video is automatically generated from a live stream using AI."
+      "ミニレッキスのうさぎ「まさお」を毎日見守る、うさぎライブカメラです。",
+      "朝・昼・夜の3部構成で、へやんぽ、ごはんタイム、ゴロン、あくび、なでなで、ブラッシングなどを配信しています。"
     ],
-    "include_time_line": true,
-    "separator": "――――――――――",
+    "include_decision_description": false,
+    "include_time_line": false,
+    "separator": "",
     "goro_lines": [
-      "プロジェクトメンバーのGPT五郎です。",
-      "このショートは、まさおのライブ配信を",
-      "AIが自動解析して切り抜いた映像です。",
-      "YOLOによる物体検出と",
-      "フレーム単位の動き指標を使って",
-      "動きのあるシーンを抽出しています。",
-      "抽出された候補の中から",
-      "約20秒のシーンを選び、",
-      "ショート動画として生成しています。",
-      "タイトルと説明文は",
-      "編集者GPT太郎が担当しています。",
-      "このプロジェクトは",
-      "まだ実験段階です。",
-      "気づいたことがあれば",
-      "ぜひコメントで教えてください。"
+      "ライブ中のかわいい瞬間は、Shortsや特集動画として紹介することがあります。",
+      "気に入ったら、ライブにもまったり遊びに来てください。",
+      "EN:",
+      "Daily rabbit live cam of Masao, a Mini Rex rabbit from Japan.",
+      "Watch relaxing Shorts, flops, yawns, naps, grooming, and dinner time."
     ],
     "hashtags": [
-      "#shorts",
-      "#rabbit",
-      "#bunny",
-      "#minirex",
       "#うさぎ",
       "#ミニレッキス",
       "#まさお",
-      "#AI切り抜き",
-      "#自動編集",
-      "#YOLO"
+      "#うさぎライブ",
+      "#うさぎライブカメラ",
+      "#rabbit",
+      "#MiniRex",
+      "#bunny",
+      "#shorts"
     ]
   },
   "telop": {

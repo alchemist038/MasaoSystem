@@ -1,6 +1,6 @@
 # MasaoSystem Agent Start Here
 
-Updated: 2026-07-10
+Updated: 2026-08-30
 Status: current
 
 This is the repository entry point. It is intentionally short.
@@ -34,7 +34,8 @@ D:\MasaoSystem\docs\current\CONTENT_AND_SNS_POLICY.md
 - Taro Selection video publishing is paused.
 - Live chatbot Taro remains a separate component.
 - Regular-video routine publishing is paused.
-- Main-channel YouTube Shorts continue morning/evening; the hideout experiment targets one daily post at 20:00 JST.
+- Main-channel YouTube Shorts use three daily slots at 07:30, 12:30, and 17:30 JST; the 04:30 heartbeat owns the guarded run after the 04:00 Live-manifest handoff. The hideout experiment targets one daily post at 20:00 JST.
+- A separate 05:15 JST heartbeat performs a read-only cross-check of processing health, the three Live reservations, the Shorts/SNS outputs, related-video readback, and ledgers. It reports gaps to the owning task and does not repair or publish anything.
 - X, TikTok, Instagram, SNS inventory, and agreed Drive/local delivery continue lightly.
 
 ## Absolute Safety Summary

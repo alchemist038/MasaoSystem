@@ -2,6 +2,21 @@
 
 更新日: 2026-03-28
 
+## 2026-07-10 Current Policy Override
+
+This file preserves the March reconstruction and public-release principles. It is not the current operating-status or permission source.
+
+Read these first:
+
+```text
+D:\MasaoSystem\docs\current\ABSOLUTE_RULES.md
+D:\MasaoSystem\docs\current\CURRENT_OPERATIONS.md
+D:\MasaoSystem\docs\current\SYSTEM_COMPONENT_MAP.md
+D:\MasaoSystem\docs\current\AGENT_ROUTING.md
+```
+
+If this document conflicts with those files, the newer current documents win. In particular, RAW media is immutable, Kodeko/Taro routine video production is paused, and YouTube/SNS writes require the current authorization rules.
+
 ## 1. 目的
 
 この文書は、このワークスペースで Codex や次回の作業者が

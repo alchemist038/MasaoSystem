@@ -1,0 +1,33 @@
+{
+  "listen_host": "100.106.183.15",
+  "listen_port": 50002,
+  "allowed_source_ips": [
+    "100.124.36.15",
+    "127.0.0.1"
+  ],
+  "bouyomi_host": "127.0.0.1",
+  "bouyomi_port": 50003,
+  "primary_bouyomi_host": "127.0.0.1",
+  "primary_bouyomi_port": 50001,
+  "bluetooth_endpoint_registry_id": "{0f77fe2a-98ab-4c32-9c44-3c5a49d0bb38}",
+  "bluetooth_waveout_name_contains": "OpenRun Pro 2 by Shokz",
+  "obs_scene_collection_dir": "C:\\Users\\alche\\AppData\\Roaming\\obs-studio\\basic\\scenes",
+  "require_obs_desktop_audio_muted": true,
+  "require_message_id": true,
+  "max_text_chars": 140,
+  "dedupe_capacity": 5000,
+  "allowed_message_types": [
+    "textMessageEvent",
+    "superChatEvent",
+    "superStickerEvent",
+    "newSponsorEvent",
+    "memberMilestoneChatEvent"
+  ],
+  "excluded_author_names": [
+    "GPT太郎",
+    "GPT五郎"
+  ],
+  "aliases_path": "aliases.json",
+  "state_path": "state\\dedupe.json",
+  "log_path": "logs\\comment_reader.log"
+}
