@@ -4,6 +4,12 @@
 again after stream stop. This is an event-based guard; it does not continuously
 watch file growth.
 
+The normal RAW recording target is Advanced output at 10000 kbps. Before every
+scheduled profile switch, the scheduler verifies the target profile's recording
+encoder bitrate and repairs it to 10000 kbps when needed. After the switch it
+verifies the OBS output mode and repairs `Simple` to `Advanced` before the next
+stream starts. Streaming remains at the profile's configured 6000 kbps.
+
 ## Start
 
 - Part 1: runs when the manual morning stream start is detected.

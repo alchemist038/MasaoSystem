@@ -25,6 +25,7 @@ const RECORDING_AUTO_START_GRACE_MS = numberFromEnv("MASAO_RECORDING_AUTO_START_
 const RECORDING_START_TIMEOUT_MS = numberFromEnv("MASAO_RECORDING_START_TIMEOUT_MS", 5000);
 const RECORDING_STOP_GRACE_MS = numberFromEnv("MASAO_RECORDING_STOP_GRACE_MS", 3000);
 const RECORDING_FILE_TIMEOUT_MS = numberFromEnv("MASAO_RECORDING_FILE_TIMEOUT_MS", 5000);
+const RECORDING_BITRATE_KBPS = numberFromEnv("MASAO_RECORDING_BITRATE_KBPS", 10000);
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -263,10 +264,79 @@ async function withObs(task) {
   }
 }
 
+function obsProfilesDir() {
+  if (process.env.MASAO_OBS_PROFILES_DIR) return process.env.MASAO_OBS_PROFILES_DIR;
+  if (!process.env.APPDATA) throw new Error("APPDATA is not set.");
+  return path.join(process.env.APPDATA, "obs-studio", "basic", "profiles");
+}
+
+function ensureRecordingEncoderBitrate(profileName, options = {}) {
+  const targetBitrate = options.targetBitrate ?? RECORDING_BITRATE_KBPS;
+  const profilesDir = options.profilesDir || obsProfilesDir();
+  const file = path.join(profilesDir, profileName, "recordEncoder.json");
+  const settings = JSON.parse(fs.readFileSync(file, "utf8"));
+  const currentBitrate = Number(settings.bitrate);
+  if (currentBitrate === targetBitrate) {
+    return { changed: false, bitrate: currentBitrate, file };
+  }
+
+  const backup = `${file}.bak-before-${targetBitrate}kbps`;
+  if (!fs.existsSync(backup)) fs.copyFileSync(file, backup);
+  const temporary = `${file}.tmp-${process.pid}`;
+  fs.writeFileSync(temporary, `${JSON.stringify({ ...settings, bitrate: targetBitrate })}\n`, "utf8");
+  fs.renameSync(temporary, file);
+  return { changed: true, bitrate: targetBitrate, file };
+}
+
+async function ensureAdvancedRecordingProfileWithObs(obs, profileName) {
+  const profile = await obs.request("GetProfileList");
+  if (profile.currentProfileName !== profileName) {
+    throw new Error(`録画設定確認対象が一致しません: expected=${profileName}, actual=${profile.currentProfileName}`);
+  }
+
+  const mode = await obs.request("GetProfileParameter", {
+    parameterCategory: "Output",
+    parameterName: "Mode",
+  });
+  if (mode.parameterValue !== "Advanced") {
+    await obs.request("SetProfileParameter", {
+      parameterCategory: "Output",
+      parameterName: "Mode",
+      parameterValue: "Advanced",
+    });
+  }
+
+  const verified = await obs.request("GetProfileParameter", {
+    parameterCategory: "Output",
+    parameterName: "Mode",
+  });
+  if (verified.parameterValue !== "Advanced") {
+    throw new Error(`録画出力モードをAdvancedへ設定できませんでした: ${profileName}`);
+  }
+  return { changed: mode.parameterValue !== "Advanced", mode: verified.parameterValue };
+}
+
 async function setProfile(profileName) {
   log(`プロファイル切替: ${profileName}`);
-  await withObs((obs) => obs.request("SetCurrentProfile", { profileName }));
-  await sleep(5000);
+  const encoder = ensureRecordingEncoderBitrate(profileName);
+  if (encoder.changed) {
+    log(`録画ビットレート補正: ${profileName} -> ${encoder.bitrate} kbps`);
+  }
+  await withObs(async (obs) => {
+    const streamStatus = await obs.request("GetStreamStatus");
+    const recordStatus = await obs.request("GetRecordStatus");
+    if (streamStatus.outputActive || recordStatus.outputActive) {
+      throw new Error("OBSの配信または録画が稼働中です。プロファイル切替は行いません。");
+    }
+    await obs.request("SetCurrentProfile", { profileName });
+    await sleep(1000);
+    const recordingMode = await ensureAdvancedRecordingProfileWithObs(obs, profileName);
+    if (recordingMode.changed) {
+      log(`録画出力モード補正: ${profileName} -> Advanced`);
+    }
+    log(`録画設定確認: ${profileName} / Advanced / ${encoder.bitrate} kbps`);
+  });
+  await sleep(4000);
 }
 
 async function setScene(sceneName) {
@@ -988,6 +1058,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+  ensureAdvancedRecordingProfileWithObs,
+  ensureRecordingEncoderBitrate,
   ensureRecordingWithObs,
   finalizeRecordingWithObs,
   formatBytes,

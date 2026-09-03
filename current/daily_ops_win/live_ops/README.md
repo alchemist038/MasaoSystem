@@ -57,6 +57,7 @@ docs/
 - Git tracks stable operation logic: schedule switching, fallback behavior, YouTube Live API helpers, and launch wrappers.
 - Git does not track daily YouTube manifests, logs, token files, OAuth files, stream keys, passwords, or OBS runtime state.
 - OBS profile files and scene collections remain runtime configuration unless a sanitized copy is intentionally added.
+- RAW recording uses Advanced output at 10000 kbps. The schedule guard repairs a target profile's recording bitrate and output mode before switching into it; stream bitrate remains profile-controlled at 6000 kbps.
 - PTZ runtime remains separate in `C:\masao_ptz`, which has its own Git repository.
 - The private comment reader is an INS14 receiver only. Its i5 sender must reuse V7's existing fetched comments; do not add another YouTube polling loop or remotely change i5 from this PC.
 - The desktop control application may start and stop only the private comment-reader path. It must never start, stop, or reconfigure the existing Taro/Goro `50000 -> 50001` path.

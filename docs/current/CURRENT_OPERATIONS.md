@@ -1,6 +1,6 @@
 # Masao Current Operations
 
-Updated: 2026-08-30
+Updated: 2026-09-03
 Status: current
 
 This file answers one question: what is operating now?
@@ -18,7 +18,7 @@ The immediate operating goal is to protect Live, keep external SNS lightweight, 
 | area | status | current operation |
 | --- | --- | --- |
 | YouTube Live | active | The `まさおライブ朝予約` heartbeat owns the bounded 04:00 JST reservation pass: reuse or create the same-day 07:00, 12:00, and 17:00 frames without duplicates, verify all three IDs, and save the daily manifest before the 04:30 join-generation consumer; protect Part 3 night/dinner as the strongest slot |
-| OBS daily operation | active | Runtime preparation is a separate permission after reservation; launch only on an explicit preparation request; Part 1 manual start; Part 2 and Part 3 use the established schedule flow |
+| OBS daily operation | active | Runtime preparation is a separate permission after reservation; launch only on an explicit preparation request; Part 1 manual start; Part 2 and Part 3 use the established schedule flow; normal stream is 6000 kbps / 1080p and RAW recording is Advanced MKV at 10000 kbps |
 | PTZ / V7 tracking | active | Existing runtime and presets continue; during Live use `AboveNormal` process priority because YOLO inference is CPU-bound |
 | Tapo / KEECE fallback | active | Normal home Live uses the location-specific `shataku` config for `見守り 2 / tapoc232`; do not use the generic launcher |
 | Room temperature overlay | active | SwitchBot Hub / Cloud API path remains the production method |
@@ -68,6 +68,11 @@ Part 3: うさぎライブ｜ミニレッキスのまさお放牧中・18:30ご�
 - All three parts use the coordinated bright thumbnail series adopted on 2026-07-15. Runtime files are `masao_thumb_part1_morning.jpg`, `masao_thumb_part2_noon.jpg`, and `masao_thumb_part3_night.jpg` under `C:\Users\alche\Desktop\OBS\サムネ` (all 1280x720 JPEG). Each image is slot-specific: morning patrol, daytime nap, and dinner around 18:30.
 - Do not redesign Live merely because Shorts distribution changes.
 - Keep public Live changes inside the daily live-prep authorization described in `ABSOLUTE_RULES.md`.
+- Keep streaming and RAW recording settings distinct: normal streaming is 6000
+  kbps / 1080p, while RAW uses Advanced MKV recording at 10000 kbps. The
+  deployed schedule guard repairs the selected profile's recording bitrate and
+  `Output/Mode` before the next stream starts; `Simple` same-as-stream recording
+  is not the normal state.
 - After PTZ, Edge, and Codex start, apply the Live CPU priority mode from the
   runbook: PTZ `AboveNormal`; active Edge/Codex/ChatGPT and Codex runtime Node
   `BelowNormal`; preserve existing `Idle` processes. Keep OBS, schedule Node,

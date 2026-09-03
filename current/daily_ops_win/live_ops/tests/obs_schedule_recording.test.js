@@ -120,3 +120,42 @@ test("reports the saved RAW file when OBS was already closed", async () => {
   assert.equal(result.fileBytes, 8192);
   assert.equal(schedule.readRecordingState(date).parts.part3.endStatus, "ok");
 });
+
+test("repairs the recording encoder bitrate to 10000 kbps", () => {
+  const profilesDir = fs.mkdtempSync(path.join(os.tmpdir(), "masao-obs-profiles-test-"));
+  const profileName = "night-test";
+  const profileDir = path.join(profilesDir, profileName);
+  fs.mkdirSync(profileDir);
+  fs.writeFileSync(path.join(profileDir, "recordEncoder.json"), JSON.stringify({ bitrate: 6000, preset: "quality" }));
+
+  const result = schedule.ensureRecordingEncoderBitrate(profileName, { profilesDir, targetBitrate: 10000 });
+  const settings = JSON.parse(fs.readFileSync(result.file, "utf8"));
+
+  assert.equal(result.changed, true);
+  assert.equal(settings.bitrate, 10000);
+  assert.equal(fs.existsSync(`${result.file}.bak-before-10000kbps`), true);
+  fs.rmSync(profilesDir, { recursive: true, force: true });
+});
+
+test("repairs Simple output mode to Advanced and verifies it", async () => {
+  let mode = "Simple";
+  const calls = [];
+  const obs = {
+    async request(requestType, requestData = {}) {
+      calls.push({ requestType, requestData });
+      if (requestType === "GetProfileList") return { currentProfileName: "night-test" };
+      if (requestType === "GetProfileParameter") return { parameterValue: mode };
+      if (requestType === "SetProfileParameter") {
+        mode = requestData.parameterValue;
+        return {};
+      }
+      throw new Error(`Unexpected OBS request: ${requestType}`);
+    },
+  };
+
+  const result = await schedule.ensureAdvancedRecordingProfileWithObs(obs, "night-test");
+
+  assert.equal(result.changed, true);
+  assert.equal(result.mode, "Advanced");
+  assert.equal(calls.filter((call) => call.requestType === "SetProfileParameter").length, 1);
+});
