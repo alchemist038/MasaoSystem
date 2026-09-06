@@ -60,6 +60,7 @@ Part 3: うさぎライブ｜ミニレッキスのまさお放牧中・18:30ご�
 
 - Part numbers remain internal labels and description text. Append the target date as `YYYY.MM.DD`; do not add title hashtags.
 - Part 1's YouTube reservation remains 07:00 JST. Its actual OBS start remains manual and may occur around 06:30 or another convenient time.
+- From 2026-09-06, all newly created Live frames (Parts 1, 2, and 3) use low latency (`contentDetails.latencyPreference=low`, not ultra-low). Verify this field on reservation API readback. Do not retroactively change active, completed, or previously reserved frames under this default-policy change.
 - Reservation and runtime preparation are separate authorizations. A reservation-only request ends after all three IDs and the daily manifest are verified; it must not start OBS, PTZ, fallback, Bouyomi, live metrics, room sensor, or schedule monitoring.
 - Before same-day main Shorts generation, create or confirm all three Live frames and verify the daily manifest at `C:\Users\alche\Desktop\OBS\youtube\broadcasts_YYYY-MM-DD.json`. Preserve the exact date, part, Live ID, title, scheduled time, and privacy mapping.
 - The daily `まさおライブ朝予約` heartbeat runs in the Live Management task at 04:00 JST. This standing authorization is limited to duplicate-safe reservation, API readback, manifest persistence, and a concise result report. The 04:30 join-generation flow may consume the manifest only after Parts 1, 2, and 3 all pass verification.

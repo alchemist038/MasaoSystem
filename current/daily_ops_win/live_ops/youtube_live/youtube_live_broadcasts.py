@@ -281,7 +281,7 @@ def broadcast_body(part: Part, day: datetime, privacy: str) -> dict[str, Any]:
             "enableAutoStop": False,
             "enableDvr": True,
             "recordFromStart": True,
-            "latencyPreference": "low" if part.key == "part3" else "normal",
+            "latencyPreference": "low",
             "monitorStream": {
                 "enableMonitorStream": False,
             },
