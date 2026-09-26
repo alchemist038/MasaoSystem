@@ -1,10 +1,16 @@
 # Masao System Absolute Rules
 
-Updated: 2026-07-10
+Updated: 2026-09-26
 Status: current / highest priority
 
 This document defines the non-negotiable rules for Masao system work.
 If an older memo or runbook conflicts with this file, stop and follow this file until the conflict is resolved.
+
+The current Codex user's shared `C:\Users\alche\.codex\AGENTS.md` also protects
+all of E: across projects. Its versioned source is
+`D:\MD\context\projects\general\codex\AGENTS.global.md`. Preserve that
+protection; this project policy does not authorize arbitrary E: writes.
+These instructions do not change Windows ACLs or configure other PCs.
 
 ## 1. Work Permission Model
 
@@ -19,12 +25,16 @@ If an older memo or runbook conflicts with this file, stop and follow this file 
 | Public SNS post | explicit approval required | Confirm account, media, text, timing, and destination |
 | Runtime deploy, restart, or configuration change | explicit approval required | Do not perform casually during an active stream |
 | Delete a video, playlist item, comment, source file, or production asset | prohibited by default | Requires itemized, explicit approval; irreversible operations need separate confirmation |
-| Start or recover i5-side scripts from this PC | prohibited | Use the i5-side agent/runtime |
+| Start or recover remote chatbot scripts from this PC | prohibited | Use the current owning machine's agent/runtime, whether i5 or another sub-PC |
 | Expose or store secrets | prohibited | Never print or commit tokens, cookies, passwords, OAuth codes, or stream keys |
 
 ## 2. RAW Media Is Immutable
 
 RAW media is never edited in place.
+
+E: is protected storage, not an agent work directory. Agents may read or copy
+required data out, but must not modify, rename, move, delete, or reorganize its
+contents. The existing approved ingest/sidecar exception below is unchanged.
 
 Protected locations and media include:
 
@@ -123,8 +133,8 @@ Thresholds:
 ## 6. Runtime and Machine Boundaries
 
 - Do not deploy or restart OBS schedule, PTZ, fallback, sensor, or chatbot components during an active stream unless the user explicitly approves the exact intervention.
-- Do not start, stop, or recover Chatbot Read A/B or other i5-owned scripts from this PC or through a UNC path.
-- Use the i5-side agent for i5 runtime actions. This PC may perform read-only health checks when available.
+- Do not start, stop, or recover Chatbot Read A/B or other remotely owned chatbot scripts from this PC or through a UNC path.
+- Use the current owning machine's agent for remote runtime actions. This PC may perform read-only health checks when available. Verify the host; an old i5 reference is not current ownership proof.
 - Keep `C:\masao_ptz` independent from Shorts and OBS repositories.
 - Keep chatbot runtime independent from the local content-production tree.
 - Preserve user changes and uncommitted Git work. Never reset or overwrite them casually.

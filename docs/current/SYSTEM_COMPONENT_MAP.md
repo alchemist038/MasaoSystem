@@ -1,6 +1,6 @@
 # Masao System Component Map
 
-Updated: 2026-07-10
+Updated: 2026-09-26
 Status: current
 
 This map separates desired source, runtime state, historical context, source media, and delivery artifacts.
@@ -12,6 +12,7 @@ This map separates desired source, runtime state, historical context, source med
 | Design, reviewable code, runbooks | `D:\MasaoSystem` | Git-managed intended state |
 | Production runtime and control plane | `C:\...`, `D:\OBS\REC` | Confirm before deploy or restart |
 | Decisions, analysis, handoffs | `D:\MD\context` | Context and reasoning, not runtime truth |
+| Cross-project Codex safety | `C:\Users\alche\.codex\AGENTS.md` | Versioned source: `D:\MD\context\projects\general\codex\AGENTS.global.md`; same-user agent guidance, not OS ACLs |
 | Canonical source media | `E:\masaos_mov` | RAW media is immutable |
 | Server/archive source media | `\\masao-n8n\MASAO_RAW\masaos_mov` | Read-only source/archive access |
 | Editing and generated output | `D:\OBS\REC\work` | All manual media work happens here |
@@ -26,7 +27,7 @@ This map separates desired source, runtime state, historical context, source med
 | Camera fallback | `live_ops\fallback` | OBS script runtime on `C:` | Active | Use the correct Jikka/Shataku preset |
 | Room sensor overlay | `D:\MasaoSystem\current\daily_ops_win\live_overlays\masao_room_sensor` | `D:\OBS\REC\overlays\masao_room_sensor` | Active | Hub/Cloud method; secrets stay in environment variables |
 | PTZ / V7 | Separate repository/runtime | `C:\masao_ptz` | PTZ lane; active | Do not absorb into Shorts or OBS trees |
-| Live chatbot | Separate i5 runtime | Remote chatbot runtime | i5-side agent; active separately | No remote start/stop from this PC |
+| Live chatbot | Separate remote runtime | Current chatbot host; do not assume i5 | Owning host's agent; verify current state using `AGENT_ROUTING.md` | No remote start/stop from this PC |
 | Current Shorts code line | `D:\MasaoSystem\current\daily_ops_win\shorts_win` | `D:\OBS\REC\scripts\youtube\yolo\WIN` | Code retained; routine high-volume publishing is not current policy | Do not assume upload authorization |
 | Post-publish tools | `D:\MasaoSystem\current\daily_ops_win\post_publish` | `D:\OBS\REC\work` utilities | On-demand | Public writes require target approval |
 | Historical reprocessing | `D:\MasaoSystem\current\historical_reprocess_win` | Local helper runtime | On-demand | RAW read-only; output outside warehouse |

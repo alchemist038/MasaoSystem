@@ -1,6 +1,6 @@
 # Masao Current Operations
 
-Updated: 2026-09-03
+Updated: 2026-09-26
 Status: current
 
 This file answers one question: what is operating now?
@@ -25,7 +25,7 @@ The immediate operating goal is to protect Live, keep external SNS lightweight, 
 | Live chatbot | active as a separate operation | Existing GPT Taro/Goro chat behavior is not the paused video-production line |
 | Kodeko daily/regular video | paused | Do not generate or publish on a daily schedule |
 | Taro Selection video | paused | Do not generate or publish the 45-60 second selection line routinely |
-| YouTube regular video | paused as a scheduled routine | Publish only after a separate proposal and approval for a strong story |
+| YouTube regular video | active weekly | On Sunday, after the 04:30 Shorts workflow is fully verified, build the next unproduced seven-day relaxation digest at low load and schedule it on the main channel for 20:00 JST; do not consume Shorts stock |
 | YouTube Shorts | active + experimental | Daily 04:30 JST heartbeat `まさお朝結合生成` owns the guarded main-channel run after the 04:00 Live manifest handoff: 07:30 and 12:30 use separate random unused stock, then 17:30 uses newest unused `processed_ready` stock. Link them to same-day Live Parts 1, 2, and 3 respectively. `まさおの隠れ家` targets one post per day at 20:00 JST without forced make-up posts |
 | Morning cross-check | active, read-only | Daily 05:15 JST heartbeat `まさおシステム5時15分状況報告` checks 360/YOLO/candidate health, the three Live IDs and manifest, main Shorts and related-video readback, hideout/TikTok/Instagram results, scene uniqueness, hashes, and ledgers. It reports gaps to the owning task and must not repair files, schedules, runtime, or public state |
 
@@ -95,23 +95,19 @@ D:\MD\context\projects\masao\RUNBOOK_morning_live_prep.md
 - Main-channel Shorts generation should attach draft title/description JSON and TXT beside each dated local video using `D:\MD\context\projects\masao\MAIN_SHORTS_METADATA_STYLE.md`; Drive delivery is explicit-request-only.
 - Before generating any of the three daily main Shorts, confirm the exact same-day Live video IDs for Parts 1, 2, and 3 from the verified daily manifest. Relate 07:30 to Part 1, 12:30 to Part 2, and 17:30 to Part 3. After Studio related-video writes, reload and read back each saved value.
 - The daily 04:30 JST heartbeat `まさお朝結合生成` is the standing owner for this guarded generation, upload, schedule, and related-video workflow. Its prerequisite is the same-day manifest created and verified by Live management at 04:00. If the manifest, date, part mapping, channel, or any required Live ID is missing or inconsistent, stop the affected YouTube operation and report it; never continue with an unrelated or missing related video.
+- Effective 2026-09-13, this heartbeat has a Sunday-only weekly continuation after the complete daily Shorts run. Use the Saturday-night/Sunday-early-morning off-stream window to build the next unproduced seven-day horizontal relaxation digest, then schedule it on the main channel for Sunday 20:00 JST. Keep RAW and registered single clips immutable, use the approved low-load build and `cafe-bgm-011` rotation, and do not alter Shorts stock consumption or gallery platform checkboxes. If the daily run is incomplete or the weekly render cannot finish before Part 1 Live preparation, stop the weekly branch and report it.
 - Hideout generation should also create a draft post package using `D:\MD\context\projects\masao\HIDEOUT_METADATA_STYLE.md`; it must not upload or schedule without explicit approval.
 
-## Current Analytics Reference
+## Analytics Evidence Routing
 
-Latest consolidated channel status:
+Use `D:\MD\context\projects\masao\ANALYTICS_INDEX.md` for dated reports and
+their missing metrics. The August 16 preliminary report and July baselines are
+historical evidence, not current September channel status. Obtain fresh Studio
+CSV or an authorized read before making current analytics claims.
 
-```text
-D:\MD\context\projects\masao\2026-07-09_channel_current_status_video_shorts_live.md
-D:\MD\context\projects\masao\2026-07-09_external_media_inflow_check.md
-```
-
-Current interpretation:
-
-- Regular videos remain too weak for daily publication.
-- Shorts have improved from the late-June bottom but have not recovered to a repeatable winning pattern.
-- Live remains functional, especially Part 3.
-- External traffic exists but is still small; keep SNS lightweight and measure it.
+Do not restore an older publishing policy from a dated analysis. The operating
+table and approved current workflow above define standing scope; this routing
+cleanup does not change schedules or authorize public writes.
 
 ## Change Rule
 

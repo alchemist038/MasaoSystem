@@ -1,9 +1,12 @@
 # Masao Agent Routing
 
-Updated: 2026-08-30
+Updated: 2026-09-26
 Status: current
 
 ## Startup Order
+
+Codex enters this repository through `D:\MasaoSystem\AGENTS.md`. The shared
+user policy protects E: across projects; the files below provide Masao context.
 
 1. `D:\MD\context\AGENT_START_HERE.md`
 2. `D:\MD\context\projects\masao\AGENT_START_HERE.md`
@@ -31,10 +34,16 @@ Destructive or irreversible actions require itemized confirmation even when the 
 | Live management | Daily 04:00 duplicate-safe Live reservation pass and manifest handoff; OBS, schedule, PTZ checks, sensor, chat docks only after separate preparation authorization | `RUNBOOK_morning_live_prep.md` | The standing heartbeat may reserve and verify the three frames only; runtime preparation and start remain separate |
 | SNS clip management | Daily 04:30 guarded generation, posting, related-Live readback, selection, editing, dedupe, gallery, and delivery | SNS management start, ledger, used-scenes list | The standing heartbeat runs only from a complete same-day Live manifest; otherwise stop the affected YouTube post |
 | X operation | Live-start text, current-Masao reply, X analytics | X workflow and recent X logs | Do not silently absorb general SNS inventory work |
-| i5 agent | Chatbot Read A/B and i5-owned runtime | i5 runtime/runbook | This PC does not start or recover it |
+| Remote chatbot owner | Chatbot Read A/B and the runtime on its current host | Current host's agent/runbook; verify the host before action | This PC does not start or recover it; i5 is a historical host label |
 | System maintenance | Git source, component map, deploy checks, runbooks, and the daily 05:15 read-only cross-check | `D:\MasaoSystem` current docs | The cross-check reports gaps to the owning lane; it does not auto-repair runtime, schedules, files, or public state |
 
 ## Character Roles
+
+Host reference: the September 19 handoff reports i5 stopped and the chatbot
+running on a sub-PC. See
+`D:\MD\context\projects\masao\2026-09-19_car_stream_post_reboot_voice_ready.md`.
+That is dated evidence, not a September 26 health check or permission to control
+the sub-PC.
 
 - Masao: subject and center of the channel.
 - Oton: owner and final decision maker.
