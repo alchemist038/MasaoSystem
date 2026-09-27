@@ -35,7 +35,20 @@
   "expand_duration_ms": 1000,
   "shrink_duration_ms": 1000,
   "transition_steps": 20,
-  "wipe_blend_mode": "OBS_BLEND_ADDITIVE",
+  "wipe_blend_mode": "OBS_BLEND_NORMAL",
+  "adaptive_wipe": {
+    "enabled": false,
+    "min_width": 250,
+    "max_width": 640,
+    "small_box_area": 0.05,
+    "large_box_area": 0.25,
+    "area_smoothing_sec": 1,
+    "resize_smoothing_sec": 0.45,
+    "max_speed_px_sec": 160,
+    "deadband_px": 8,
+    "max_age_sec": 1.5,
+    "subject_source_name": "OBSBOT VC"
+  },
   "overlap_transparency": {
     "enabled": false,
     "subject_source_name": "OBSBOT VC",

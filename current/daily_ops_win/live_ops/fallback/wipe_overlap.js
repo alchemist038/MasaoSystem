@@ -31,7 +31,7 @@ function projectRect(box, t) {
     top: Math.min(py(y1), py(y2)), bottom: Math.max(py(y1), py(y2)) };
 }
 
-function overlapStatus(state, subject, wipe, now, options) {
+function subjectRect(state, subject, now, options) {
   const b = state?.subject_bbox;
   if (!finite(now) || !state || state.tracking_enabled !== true || state.detected !== true ||
       state.lost_stage !== "seen" || !finite(state.updated_at_epoch) ||
@@ -41,10 +41,14 @@ function overlapStatus(state, subject, wipe, now, options) {
       !finite(b.frame_width) || !finite(b.frame_height) || b.frame_width <= 0 || b.frame_height <= 0 ||
       !Array.isArray(b.xyxy) || b.xyxy.length !== 4 ||
       !b.xyxy.every(v => finite(v) && v >= 0 && v <= 1) ||
-      b.xyxy[0] >= b.xyxy[2] || b.xyxy[1] >= b.xyxy[3]) return "unknown";
-  if (!subject || !wipe || subject.isGroup || wipe.isGroup ||
-      !subject.sceneItemEnabled || !wipe.sceneItemEnabled) return "unknown";
-  const a = projectRect(b.xyxy, subject.sceneItemTransform);
+    b.xyxy[0] >= b.xyxy[2] || b.xyxy[1] >= b.xyxy[3]) return null;
+  if (!subject || subject.isGroup || !subject.sceneItemEnabled) return null;
+  return projectRect(b.xyxy, subject.sceneItemTransform);
+}
+
+function overlapStatus(state, subject, wipe, now, options) {
+  if (!wipe || wipe.isGroup || !wipe.sceneItemEnabled) return "unknown";
+  const a = subjectRect(state, subject, now, options);
   const c = projectRect([0, 0, 1, 1], wipe.sceneItemTransform);
   if (!a || !c) return "unknown";
   if (a.empty || c.empty) return "clear";
@@ -86,4 +90,4 @@ async function updateWipeBlend(obs, config, state, now, policy, dryRun, log) {
   return { status, blend: desired };
 }
 
-module.exports = { NORMAL, TRANSPARENT, projectRect, overlapStatus, OverlapPolicy, updateWipeBlend };
+module.exports = { NORMAL, TRANSPARENT, projectRect, subjectRect, overlapStatus, OverlapPolicy, updateWipeBlend };

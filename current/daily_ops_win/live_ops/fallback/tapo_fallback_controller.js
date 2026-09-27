@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { OverlapPolicy, updateWipeBlend } = require("./wipe_overlap");
+const { sizingOptions, AdaptiveWipePolicy, updateAdaptiveWipe } = require("./adaptive_wipe");
 
 const DEFAULT_CONFIG_PATH = path.join(__dirname, "tapo_fallback_config.json");
 const DEFAULT_LOG_DIR = "C:\\Users\\alche\\Desktop\\OBS\\logs";
@@ -97,6 +98,7 @@ function readConfig(file) {
       restoreDelaySec: Math.max(0, numberFromConfig(overlap.restore_delay_sec, 1)),
       marginPx: Math.max(0, numberFromConfig(overlap.margin_px, 16)),
     },
+    adaptive: sizingOptions(config.adaptive_wipe),
     logDir: config.log_dir || DEFAULT_LOG_DIR,
   };
 }
@@ -412,7 +414,8 @@ async function applyMode(config, mode, dryRun, log) {
       mode === "large"
         ? computeLargeTransform(config, currentTransform, videoSettings)
         : transformForObs(config.wipeTransform || currentTransform);
-    const nextBlendMode = mode === "large" ? config.largeBlendMode : config.wipeBlendMode;
+    const nextBlendMode = mode === "large" ? config.largeBlendMode :
+      config.adaptive.enabled ? "OBS_BLEND_NORMAL" : config.wipeBlendMode;
 
     if (!dryRun) {
       await obs.request("SetSceneItemEnabled", {
@@ -420,7 +423,7 @@ async function applyMode(config, mode, dryRun, log) {
         sceneItemId: item.sceneItemId,
         sceneItemEnabled: true,
       });
-      if (mode === "large") {
+      if (mode === "large" || config.adaptive.enabled) {
         await setSceneItemBlendMode(obs, config.targetScene, item.sceneItemId, nextBlendMode);
       }
     }
@@ -483,14 +486,31 @@ async function main() {
   let log = makeLogger(DEFAULT_LOG_DIR);
   let overlapObs = null;
   const overlapPolicy = new OverlapPolicy();
+  const adaptivePolicy = new AdaptiveWipePolicy();
+  let lastSizingLog = 0;
+  let cachedState = null;
+  let lastStateRead = 0;
   const checkOverlap = async (config, state) => {
     if (currentMode !== "small" || config.manualOverride === "disabled") {
       overlapPolicy.reset();
+      adaptivePolicy.reset();
       return;
     }
-    if (!config.overlap.enabled && !overlapObs) return;
+    if (!config.overlap.enabled && !config.adaptive.enabled && !overlapObs) return;
     try {
       if (!overlapObs) overlapObs = await connectObs();
+      if (config.adaptive.enabled) {
+        const now = Date.now() / 1000;
+        const result = await updateAdaptiveWipe(overlapObs, config, state, now,
+          adaptivePolicy, args.dryRun, log);
+        if (now - lastSizingLog >= 30) {
+          log(`adaptive: ${JSON.stringify(result)}`);
+          lastSizingLog = now;
+        }
+        overlapPolicy.reset();
+        return;
+      }
+      adaptivePolicy.reset();
       await updateWipeBlend(overlapObs, config, state, Date.now() / 1000,
         overlapPolicy, args.dryRun, log);
       if (!config.overlap.enabled) {
@@ -502,6 +522,7 @@ async function main() {
       if (overlapObs) overlapObs.close();
       overlapObs = null;
       overlapPolicy.reset();
+      adaptivePolicy.reset();
       throw error;
     }
   };
@@ -509,7 +530,7 @@ async function main() {
   do {
     const config = readConfig(args.configPath);
     log = makeLogger(config.logDir);
-    const intervalMs = args.intervalMs || config.pollIntervalMs;
+    const intervalMs = args.intervalMs || (config.adaptive.enabled ? 100 : config.pollIntervalMs);
     const nowSec = Date.now() / 1000;
 
     try {
@@ -519,7 +540,12 @@ async function main() {
         continue;
       }
 
-      const state = tryReadJsonFile(config.statePath);
+      // Animate at 10Hz without increasing reads of V7's atomic state file.
+      if (nowSec - lastStateRead >= Math.max(100, config.pollIntervalMs) / 1000) {
+        cachedState = tryReadJsonFile(config.statePath);
+        lastStateRead = nowSec;
+      }
+      const state = cachedState;
       if (!state && config.manualOverride === "auto" && nowSec - lastMissingStateLog > 30) {
         log(`waiting for V7 state: ${config.statePath}`);
         lastMissingStateLog = nowSec;
@@ -546,6 +572,7 @@ async function main() {
         await applyMode(config, mode, args.dryRun, log);
         currentMode = mode;
         overlapPolicy.reset();
+        adaptivePolicy.reset();
       }
       await checkOverlap(config, state);
       lastErrorMessage = "";
