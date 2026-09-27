@@ -36,6 +36,13 @@
   "shrink_duration_ms": 1000,
   "transition_steps": 20,
   "wipe_blend_mode": "OBS_BLEND_ADDITIVE",
+  "overlap_transparency": {
+    "enabled": false,
+    "subject_source_name": "OBSBOT VC",
+    "max_age_sec": 1.5,
+    "restore_delay_sec": 1,
+    "margin_px": 16
+  },
   "log_dir": "C:\\Users\\alche\\Desktop\\OBS\\logs",
   "wipe_transform": {
     "alignment": 5,

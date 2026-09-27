@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { OverlapPolicy, updateWipeBlend } = require("./wipe_overlap");
 
 const DEFAULT_CONFIG_PATH = path.join(__dirname, "tapo_fallback_config.json");
 const DEFAULT_LOG_DIR = "C:\\Users\\alche\\Desktop\\OBS\\logs";
@@ -65,6 +66,7 @@ function blendModeFromConfig(value, fallback) {
 
 function readConfig(file) {
   const config = tryReadJsonFile(file) || {};
+  const overlap = config.overlap_transparency || {};
   return {
     enabled: config.enabled !== false,
     statePath: config.state_path || "C:\\masao_ptz\\state\\v7_tracking_state.json",
@@ -88,6 +90,13 @@ function readConfig(file) {
     largeTransform: config.large_transform || null,
     wipeBlendMode: blendModeFromConfig(config.wipe_blend_mode, "OBS_BLEND_NORMAL"),
     largeBlendMode: blendModeFromConfig(config.large_blend_mode, "OBS_BLEND_NORMAL"),
+    overlap: {
+      enabled: overlap.enabled === true,
+      subjectSourceName: overlap.subject_source_name || "OBSBOT VC",
+      maxAgeSec: Math.max(0.1, numberFromConfig(overlap.max_age_sec, 1.5)),
+      restoreDelaySec: Math.max(0, numberFromConfig(overlap.restore_delay_sec, 1)),
+      marginPx: Math.max(0, numberFromConfig(overlap.margin_px, 16)),
+    },
     logDir: config.log_dir || DEFAULT_LOG_DIR,
   };
 }
@@ -128,6 +137,11 @@ function sha256Base64(value) {
 
 function waitForMessage(ws) {
   return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      ws.close();
+      reject(new Error("OBS handshake timed out"));
+    }, 3000);
     const onMessage = (event) => {
       cleanup();
       resolve(JSON.parse(event.data.toString()));
@@ -141,6 +155,7 @@ function waitForMessage(ws) {
       reject(new Error("WebSocket closed before OBS responded."));
     };
     const cleanup = () => {
+      clearTimeout(timer);
       ws.removeEventListener("message", onMessage);
       ws.removeEventListener("error", onError);
       ws.removeEventListener("close", onClose);
@@ -156,8 +171,15 @@ async function connectObs() {
   const ws = new WebSocket(`ws://127.0.0.1:${config.port}`);
 
   await new Promise((resolve, reject) => {
-    ws.addEventListener("open", resolve, { once: true });
-    ws.addEventListener("error", (event) => reject(event.error || new Error("WebSocket open error")), { once: true });
+    const timer = setTimeout(() => {
+      ws.close();
+      reject(new Error("OBS connection timed out"));
+    }, 3000);
+    ws.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
+    ws.addEventListener("error", (event) => {
+      clearTimeout(timer);
+      reject(event.error || new Error("WebSocket open error"));
+    }, { once: true });
   });
 
   const hello = await waitForMessage(ws);
@@ -184,6 +206,7 @@ async function connectObs() {
     const pendingRequest = pending.get(message.d.requestId);
     if (!pendingRequest) return;
     pending.delete(message.d.requestId);
+    clearTimeout(pendingRequest.timer);
     const status = message.d.requestStatus || {};
     if (status.result) {
       pendingRequest.resolve(message.d.responseData || {});
@@ -193,7 +216,10 @@ async function connectObs() {
   });
 
   ws.addEventListener("close", () => {
-    for (const request of pending.values()) request.reject(new Error("OBS WebSocket closed."));
+    for (const request of pending.values()) {
+      clearTimeout(request.timer);
+      request.reject(new Error("OBS WebSocket closed."));
+    }
     pending.clear();
   });
 
@@ -202,8 +228,13 @@ async function connectObs() {
       const requestId = String(nextRequestId++);
       const payload = { op: 6, d: { requestType, requestId, requestData } };
       return new Promise((resolve, reject) => {
-        pending.set(requestId, { resolve, reject });
-        ws.send(JSON.stringify(payload));
+        const timer = setTimeout(() => {
+          pending.delete(requestId);
+          reject(new Error(`OBS request timed out: ${requestType}`));
+        }, 3000);
+        pending.set(requestId, { resolve, reject, timer });
+        try { ws.send(JSON.stringify(payload)); }
+        catch (error) { clearTimeout(timer); pending.delete(requestId); reject(error); }
       });
     },
     close() {
@@ -450,6 +481,30 @@ async function main() {
   let lastErrorMessage = "";
   let lastMissingStateLog = 0;
   let log = makeLogger(DEFAULT_LOG_DIR);
+  let overlapObs = null;
+  const overlapPolicy = new OverlapPolicy();
+  const checkOverlap = async (config, state) => {
+    if (currentMode !== "small" || config.manualOverride === "disabled") {
+      overlapPolicy.reset();
+      return;
+    }
+    if (!config.overlap.enabled && !overlapObs) return;
+    try {
+      if (!overlapObs) overlapObs = await connectObs();
+      await updateWipeBlend(overlapObs, config, state, Date.now() / 1000,
+        overlapPolicy, args.dryRun, log);
+      if (!config.overlap.enabled) {
+        overlapObs.close();
+        overlapObs = null;
+        overlapPolicy.reset();
+      }
+    } catch (error) {
+      if (overlapObs) overlapObs.close();
+      overlapObs = null;
+      overlapPolicy.reset();
+      throw error;
+    }
+  };
 
   do {
     const config = readConfig(args.configPath);
@@ -473,6 +528,7 @@ async function main() {
       const mode = desiredMode(config, state, nowSec);
       if (!mode) {
         pendingMode = null;
+        await checkOverlap(config, state);
         if (args.once) break;
         await sleep(intervalMs);
         continue;
@@ -489,7 +545,9 @@ async function main() {
       if (nowSec - pendingSince >= waitSec && currentMode !== mode) {
         await applyMode(config, mode, args.dryRun, log);
         currentMode = mode;
+        overlapPolicy.reset();
       }
+      await checkOverlap(config, state);
       lastErrorMessage = "";
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
@@ -503,9 +561,14 @@ async function main() {
     if (args.once) break;
     await sleep(intervalMs);
   } while (true);
+  if (overlapObs) overlapObs.close();
 }
 
-main().catch((error) => {
-  console.error(error && error.stack ? error.stack : error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error && error.stack ? error.stack : error);
+    process.exit(1);
+  });
+}
+
+module.exports = { withObs, readConfig, desiredMode, transformForObs };
