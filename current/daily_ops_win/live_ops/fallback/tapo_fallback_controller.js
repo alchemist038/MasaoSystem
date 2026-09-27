@@ -50,6 +50,19 @@ function numberFromConfig(value, fallback) {
   return Number.isFinite(number) ? number : fallback;
 }
 
+function blendModeFromConfig(value, fallback) {
+  const supported = new Set([
+    "OBS_BLEND_NORMAL",
+    "OBS_BLEND_ADDITIVE",
+    "OBS_BLEND_SUBTRACT",
+    "OBS_BLEND_SCREEN",
+    "OBS_BLEND_MULTIPLY",
+    "OBS_BLEND_LIGHTEN",
+    "OBS_BLEND_DARKEN",
+  ]);
+  return supported.has(value) ? value : fallback;
+}
+
 function readConfig(file) {
   const config = tryReadJsonFile(file) || {};
   return {
@@ -73,6 +86,8 @@ function readConfig(file) {
     transitionSteps: Math.max(1, Math.round(numberFromConfig(config.transition_steps, 20))),
     wipeTransform: config.wipe_transform || null,
     largeTransform: config.large_transform || null,
+    wipeBlendMode: blendModeFromConfig(config.wipe_blend_mode, "OBS_BLEND_NORMAL"),
+    largeBlendMode: blendModeFromConfig(config.large_blend_mode, "OBS_BLEND_NORMAL"),
     logDir: config.log_dir || DEFAULT_LOG_DIR,
   };
 }
@@ -323,6 +338,14 @@ async function setSceneItemTransform(obs, sceneName, sceneItemId, transform) {
   });
 }
 
+async function setSceneItemBlendMode(obs, sceneName, sceneItemId, blendMode) {
+  await obs.request("SetSceneItemBlendMode", {
+    sceneName,
+    sceneItemId,
+    sceneItemBlendMode: blendMode,
+  });
+}
+
 async function applyTransformWithTransition(obs, config, sceneItemId, fromTransform, toTransform, mode, dryRun, log) {
   const durationMs = mode === "large" ? config.expandDurationMs : config.shrinkDurationMs;
   const steps = config.transitionEnabled && durationMs > 0 ? config.transitionSteps : 1;
@@ -358,6 +381,7 @@ async function applyMode(config, mode, dryRun, log) {
       mode === "large"
         ? computeLargeTransform(config, currentTransform, videoSettings)
         : transformForObs(config.wipeTransform || currentTransform);
+    const nextBlendMode = mode === "large" ? config.largeBlendMode : config.wipeBlendMode;
 
     if (!dryRun) {
       await obs.request("SetSceneItemEnabled", {
@@ -365,6 +389,9 @@ async function applyMode(config, mode, dryRun, log) {
         sceneItemId: item.sceneItemId,
         sceneItemEnabled: true,
       });
+      if (mode === "large") {
+        await setSceneItemBlendMode(obs, config.targetScene, item.sceneItemId, nextBlendMode);
+      }
     }
     await applyTransformWithTransition(
       obs,
@@ -376,11 +403,17 @@ async function applyMode(config, mode, dryRun, log) {
       dryRun,
       log
     );
+    if (!dryRun && mode !== "large") {
+      await setSceneItemBlendMode(obs, config.targetScene, item.sceneItemId, nextBlendMode);
+    }
     if (!dryRun) {
       log(
         `applied: ${mode} scene=${config.targetScene} source=${config.sourceName} ` +
-          `duration=${mode === "large" ? config.expandDurationMs : config.shrinkDurationMs}ms`
+          `duration=${mode === "large" ? config.expandDurationMs : config.shrinkDurationMs}ms ` +
+          `blend=${nextBlendMode}`
       );
+    } else {
+      log(`dry-run blend: mode=${mode} blend=${nextBlendMode}`);
     }
   });
 }

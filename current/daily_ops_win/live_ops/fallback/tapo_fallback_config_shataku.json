@@ -13,6 +13,7 @@
   "recover_exit_wait_sec": 3,
   "manual_override": "auto",
   "large_transform_mode": "cover_canvas",
+  "large_blend_mode": "OBS_BLEND_NORMAL",
   "large_transform": {
     "alignment": 5,
     "boundsAlignment": 0,
@@ -34,6 +35,7 @@
   "expand_duration_ms": 1000,
   "shrink_duration_ms": 1000,
   "transition_steps": 20,
+  "wipe_blend_mode": "OBS_BLEND_ADDITIVE",
   "log_dir": "C:\\Users\\alche\\Desktop\\OBS\\logs",
   "wipe_transform": {
     "alignment": 5,
@@ -46,14 +48,14 @@
     "cropRight": 0,
     "cropToBounds": false,
     "cropTop": 0,
-    "height": 175,
+    "height": 285,
     "positionX": 0,
     "positionY": 0,
     "rotation": 0,
-    "scaleX": 0.10798610746860504,
-    "scaleY": 0.10802469402551651,
+    "scaleX": 0.176041662693024,
+    "scaleY": 0.175925925374031,
     "sourceHeight": 1620,
     "sourceWidth": 2880,
-    "width": 311
+    "width": 507
   }
 }
