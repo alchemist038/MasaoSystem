@@ -1,6 +1,6 @@
 # Masao Current Operations
 
-Updated: 2026-09-26
+Updated: 2026-10-03
 Status: current
 
 This file answers one question: what is operating now?
@@ -87,6 +87,24 @@ D:\MD\context\projects\masao\RUNBOOK_morning_live_prep.md
 ```
 
 ## Content Baseline
+
+### Approved Composition Trial: 2026-10-04 Through 2026-10-17
+
+For these JST publication dates only, main Shorts at 07:30 and 17:30 prioritize
+whole-clip selection/order: readable movement or expression first, a contrasting
+middle action, then a calm ending. Keep morning random candidate sourcing and
+evening newest eligible unused stock. The 12:30 legacy composition is unchanged.
+Use existing duration limits and BGM; no trimming, speed/crop change, new SE,
+logos, or captions. Related Live mapping, metadata style, stock guards, other
+platforms, and weekly video remain unchanged. If the candidate pool cannot fit
+the pattern, use the legacy composition for that slot and record the reason.
+Never replace already generated or scheduled outputs. Record applied/control/
+fallback status, ordered sceneKeys, duration, source dates and final video ID.
+Unless the user approves extension, dates from October 18 revert to legacy
+composition, not a posting pause. Detailed selection and evaluation contract:
+`D:\MD\context\projects\masao\2026-10-03_shorts_composition_trial.md`.
+
+### Unchanged Baseline
 
 - The subject is Masao. AI characters remain supporting editors and operators.
 - The 10,000-subscriber story may remain in Live overlays and descriptions, but it must not replace Masao as the first visual hook.
