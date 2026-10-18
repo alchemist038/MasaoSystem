@@ -11,6 +11,10 @@
   "recover_trigger_stage": "seen",
   "lost_enter_wait_sec": 0,
   "recover_exit_wait_sec": 3,
+  "box_loss": {
+    "enabled": false,
+    "timeout_sec": 1.5
+  },
   "manual_override": "auto",
   "large_transform_mode": "cover_canvas",
   "large_blend_mode": "OBS_BLEND_NORMAL",
@@ -38,6 +42,9 @@
   "wipe_blend_mode": "OBS_BLEND_NORMAL",
   "adaptive_wipe": {
     "enabled": false,
+    "mode": "x_position",
+    "margin_px": 16,
+    "grow_delay_sec": 1,
     "min_width": 450,
     "max_width": 600,
     "small_box_area": 0.05,
@@ -56,7 +63,8 @@
     "subject_source_name": "OBSBOT VC",
     "max_age_sec": 1.5,
     "restore_delay_sec": 1,
-    "margin_px": 16
+    "margin_px": 16,
+    "vertical_margin_px": 0
   },
   "log_dir": "C:\\Users\\alche\\Desktop\\OBS\\logs",
   "wipe_transform": {

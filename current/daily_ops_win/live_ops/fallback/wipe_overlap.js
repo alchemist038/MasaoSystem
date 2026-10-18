@@ -60,10 +60,10 @@ function projectRect(box, t) {
     top: Math.min(py(y1), py(y2)), bottom: Math.max(py(y1), py(y2)) };
 }
 
-function subjectRect(state, subject, now, options) {
+function detectionBox(state, now, options) {
   const b = state?.subject_bbox;
   if (!finite(now) || !state || state.tracking_enabled !== true || state.detected !== true ||
-      state.lost_stage !== "seen" || !finite(state.updated_at_epoch) ||
+      (options.requireSeen !== false && state.lost_stage !== "seen") || !finite(state.updated_at_epoch) ||
       now - state.updated_at_epoch > options.maxAgeSec || now < state.updated_at_epoch - 0.2 ||
       !b || b.coordinate_space !== "capture_normalized" || !finite(b.observed_at_epoch) ||
       now - b.observed_at_epoch > options.maxAgeSec || now < b.observed_at_epoch - 0.2 ||
@@ -71,6 +71,12 @@ function subjectRect(state, subject, now, options) {
       !Array.isArray(b.xyxy) || b.xyxy.length !== 4 ||
       !b.xyxy.every(v => finite(v) && v >= 0 && v <= 1) ||
     b.xyxy[0] >= b.xyxy[2] || b.xyxy[1] >= b.xyxy[3]) return null;
+  return b;
+}
+
+function subjectRect(state, subject, now, options) {
+  const b = detectionBox(state, now, options);
+  if (!b) return null;
   if (!subject || subject.isGroup || !subject.sceneItemEnabled) return null;
   return projectRect(b.xyxy, subject.sceneItemTransform);
 }
@@ -82,8 +88,9 @@ function overlapStatus(state, subject, wipe, now, options) {
   if (!a || !c) return "unknown";
   if (a.empty || c.empty) return "clear";
   const m = options.marginPx;
+  const my = options.marginYPx ?? m;
   return a.right + m > c.left && a.left - m < c.right &&
-    a.bottom + m > c.top && a.top - m < c.bottom ? "overlap" : "clear";
+    a.bottom + my > c.top && a.top - my < c.bottom ? "overlap" : "clear";
 }
 
 class OverlapPolicy {
@@ -124,5 +131,5 @@ async function updateWipeBlend(obs, config, state, now, policy, dryRun, log) {
   return { status, blend: desired, ...(usesOpacity ? { opacityPercent } : {}) };
 }
 
-module.exports = { NORMAL, TRANSPARENT, OPACITY_FILTER, projectRect, subjectRect,
+module.exports = { NORMAL, TRANSPARENT, OPACITY_FILTER, projectRect, detectionBox, subjectRect,
   overlapStatus, OverlapPolicy, updateWipeBlend, setWipeOpacity };

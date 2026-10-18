@@ -2,7 +2,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { OverlapPolicy, updateWipeBlend, setWipeOpacity } = require("./wipe_overlap");
-const { sizingOptions, AdaptiveWipePolicy, updateAdaptiveWipe } = require("./adaptive_wipe");
+const { sizingOptions, AdaptiveWipePolicy, PositionWipePolicy, updateAdaptiveWipe } = require("./adaptive_wipe");
+const { BoxLossPolicy } = require("./box_loss");
 
 const DEFAULT_CONFIG_PATH = path.join(__dirname, "tapo_fallback_config.json");
 const DEFAULT_LOG_DIR = "C:\\Users\\alche\\Desktop\\OBS\\logs";
@@ -68,6 +69,7 @@ function blendModeFromConfig(value, fallback) {
 function readConfig(file) {
   const config = tryReadJsonFile(file) || {};
   const overlap = config.overlap_transparency || {};
+  const boxLoss = config.box_loss || {};
   return {
     enabled: config.enabled !== false,
     statePath: config.state_path || "C:\\masao_ptz\\state\\v7_tracking_state.json",
@@ -81,6 +83,11 @@ function readConfig(file) {
     recoverTriggerStage: config.recover_trigger_stage || "seen",
     lostEnterWaitSec: numberFromConfig(config.lost_enter_wait_sec, 0),
     recoverExitWaitSec: numberFromConfig(config.recover_exit_wait_sec, 3),
+    boxLoss: {
+      enabled: boxLoss.enabled === true,
+      timeoutSec: Math.max(.2, Math.min(30, numberFromConfig(boxLoss.timeout_sec, 1.5))),
+      recoverSec: Math.max(0, Math.min(30, numberFromConfig(config.recover_exit_wait_sec, 3))),
+    },
     manualOverride: config.manual_override || "auto",
     largeTransformMode: config.large_transform_mode || "cover_canvas",
     transitionEnabled: config.transition_enabled !== false,
@@ -99,8 +106,11 @@ function readConfig(file) {
       maxAgeSec: Math.max(0.1, numberFromConfig(overlap.max_age_sec, 1.5)),
       restoreDelaySec: Math.max(0, numberFromConfig(overlap.restore_delay_sec, 1)),
       marginPx: Math.max(0, numberFromConfig(overlap.margin_px, 16)),
+      marginYPx: Math.max(0, numberFromConfig(overlap.vertical_margin_px,
+        numberFromConfig(overlap.margin_px, 16))),
+      requireSeen: boxLoss.enabled !== true,
     },
-    adaptive: sizingOptions(config.adaptive_wipe),
+    adaptive: { ...sizingOptions(config.adaptive_wipe), requireSeen: boxLoss.enabled !== true },
     logDir: config.log_dir || DEFAULT_LOG_DIR,
   };
 }
@@ -482,6 +492,16 @@ function desiredMode(config, state, nowSec) {
   return null;
 }
 
+function modeDecision(config, state, now, boxPolicy) {
+  if (config.boxLoss.enabled && config.manualOverride === "auto") {
+    return { ...boxPolicy.step(state, now, config.boxLoss), waitSec: 0 };
+  }
+  boxPolicy.reset();
+  const mode = desiredMode(config, state, now);
+  return { mode, reason: "legacy_or_manual",
+    waitSec: mode === "large" ? config.lostEnterWaitSec : config.recoverExitWaitSec };
+}
+
 async function updateWipePresentation(obs, config, state, now, mode, policies, dryRun, log) {
   if (mode !== "small" || config.manualOverride === "disabled" || config.enabled === false) {
     policies.overlap.reset();
@@ -525,7 +545,9 @@ async function main() {
   let log = makeLogger(DEFAULT_LOG_DIR);
   let overlapObs = null;
   const overlapPolicy = new OverlapPolicy();
-  const adaptivePolicy = new AdaptiveWipePolicy();
+  let adaptivePolicy = new AdaptiveWipePolicy();
+  let sizingMode = "area";
+  const boxLossPolicy = new BoxLossPolicy();
   let lastSizingLog = 0;
   let cachedState = null;
   let lastStateRead = 0;
@@ -562,12 +584,18 @@ async function main() {
 
   do {
     const config = readConfig(args.configPath);
+    if (config.adaptive.mode !== sizingMode) {
+      sizingMode = config.adaptive.mode;
+      adaptivePolicy = sizingMode === "x_position" ? new PositionWipePolicy() : new AdaptiveWipePolicy();
+    }
     log = makeLogger(config.logDir);
     const intervalMs = args.intervalMs || (config.adaptive.enabled ? 100 : config.pollIntervalMs);
     const nowSec = Date.now() / 1000;
 
     try {
       if (!config.enabled) {
+        boxLossPolicy.reset();
+        pendingMode = null;
         if (config.overlap.mode === "opacity") await checkOverlap(config, null);
         if (args.once) break;
         await sleep(intervalMs);
@@ -585,7 +613,8 @@ async function main() {
         lastMissingStateLog = nowSec;
       }
 
-      const mode = desiredMode(config, state, nowSec);
+      const decision = modeDecision(config, state, nowSec, boxLossPolicy);
+      const { mode, waitSec } = decision;
       if (!mode) {
         pendingMode = null;
         await checkOverlap(config, state);
@@ -597,11 +626,9 @@ async function main() {
       if (mode !== pendingMode) {
         pendingMode = mode;
         pendingSince = nowSec;
-        const waitSec = mode === "large" ? config.lostEnterWaitSec : config.recoverExitWaitSec;
-        log(`pending: ${mode} wait=${waitSec.toFixed(1)}s lost_stage=${state ? state.lost_stage : "manual"}`);
+        log(`pending: ${mode} wait=${waitSec.toFixed(1)}s reason=${decision.reason} lost_stage=${state ? state.lost_stage : "manual"}`);
       }
 
-      const waitSec = mode === "large" ? config.lostEnterWaitSec : config.recoverExitWaitSec;
       if (nowSec - pendingSince >= waitSec && currentMode !== mode) {
         await applyMode(config, mode, args.dryRun, log);
         currentMode = mode;
@@ -632,4 +659,5 @@ if (require.main === module) {
   });
 }
 
-module.exports = { withObs, readConfig, desiredMode, transformForObs, updateWipePresentation, applyModeToObs };
+module.exports = { withObs, readConfig, desiredMode, modeDecision, transformForObs,
+  updateWipePresentation, applyModeToObs };

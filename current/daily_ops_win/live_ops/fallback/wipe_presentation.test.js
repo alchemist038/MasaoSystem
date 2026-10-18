@@ -2,7 +2,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { updateWipePresentation, desiredMode, readConfig, applyModeToObs } = require("./tapo_fallback_controller");
-const { sizingOptions, AdaptiveWipePolicy } = require("./adaptive_wipe");
+const { sizingOptions, AdaptiveWipePolicy, PositionWipePolicy } = require("./adaptive_wipe");
+const { BoxLossPolicy } = require("./box_loss");
+const { modeDecision } = require("./tapo_fallback_controller");
 const { OverlapPolicy, NORMAL, TRANSPARENT } = require("./wipe_overlap");
 
 const transform = { sourceWidth: 1920, sourceHeight: 1080, width: 1920, height: 1080,
@@ -208,4 +210,80 @@ test("a managed filter name collision fails without changing user filters", asyn
     filterEnabled: true, filterSettings: { opacity: 80 } });
   await assert.rejects(f.tick(state(overlapping, 100), 100), /another filter kind/);
   assert.equal(f.obs.filters[0].filterSettings.opacity, 80);
+});
+
+test("X resizing and independent loss preserve full-screen opacity and recovery priority", async () => {
+  const f = fixture(true);
+  f.config.adaptive = { ...sizingOptions({ enabled: true, mode: "x_position", min_width: 450, max_width: 600 }), requireSeen: false };
+  f.config.overlap.requireSeen = false;
+  f.config.boxLoss = { enabled: true, timeoutSec: 1.5, recoverSec: 3 };
+  f.config.transitionEnabled = false;
+  f.config.wipeTransform = { ...transform, sourceWidth: 2880, sourceHeight: 1620,
+    width: 450, height: 450*9/16, scaleX: 450/2880, scaleY: 450/2880 };
+  f.policies.adaptive = new PositionWipePolicy();
+  const loss = new BoxLossPolicy();
+  let mode = null;
+  const run = async (s, now) => {
+    const decision = modeDecision(f.config, s, now, loss);
+    if (decision.mode && decision.mode !== mode) {
+      await applyModeToObs(f.obs, f.config, decision.mode, false, () => {});
+      mode = decision.mode;
+      f.policies.adaptive.reset(); f.policies.overlap.reset();
+    }
+    return f.tick(s, now, mode);
+  };
+  for (let i = 0; i < 100; i++) {
+    const now = 100+i/10;
+    await run({ ...state(clear, now), lost_stage: "search" }, now);
+  }
+  assert.equal(mode, "small");
+  assert.equal(f.wipe.sceneItemTransform.width, 600);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+  for (let i = 0; i < 60; i++) await run(state(overlapping, 110+i/10), 110+i/10);
+  assert.equal(f.wipe.sceneItemTransform.width, 450);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
+  const frozen = state(clear, 116);
+  await run(frozen, 116);
+  await run(frozen, 117.5);
+  assert.equal(mode, "large");
+  assert.equal(f.wipe.sceneItemTransform.width, 1920);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+  for (const now of [118, 118.5, 119, 119.5, 120, 120.5]) {
+    await run(state(clear, now), now);
+    assert.equal(f.wipe.sceneItemTransform.width, 1920);
+  }
+  await run(state(clear, 121), 121);
+  assert.equal(mode, "small");
+  assert.equal(f.wipe.sceneItemTransform.width, 450);
+});
+
+test("X-only overlap with separated Y stays opaque, then XY overlap fades", async () => {
+  const f = fixture(true);
+  f.config.adaptive = sizingOptions({ enabled: true, mode: "x_position", min_width: 450, max_width: 600 });
+  f.policies.adaptive = new PositionWipePolicy();
+  const below = [0, .6, .2, .9];
+  for (let i = 0; i < 30; i++) await f.tick(state(below, 100+i/10), 100+i/10);
+  assert.equal(f.wipe.sceneItemTransform.width, 450);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+  await f.tick(state(overlapping, 103), 103);
+  assert.equal(f.wipe.sceneItemTransform.width, 450);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
+  await f.tick(state(below, 103.1), 103.1);
+  await f.tick(state(below, 104.2), 104.2);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+  assert.equal(f.wipe.sceneItemTransform.width, 450);
+});
+
+test("even a small positive Y gap does not fade the X-position wipe", async () => {
+  const f = fixture(true);
+  f.config.adaptive = sizingOptions({ enabled: true, mode: "x_position", min_width: 450, max_width: 600 });
+  f.config.overlap.marginYPx = 0;
+  f.policies.adaptive = new PositionWipePolicy();
+  const below = [0, (450*9/16 + 1)/1080, .2, .8];
+  for (const now of [100, 100.5, 101.1]) await f.tick(state(below, now), now);
+  assert.equal(f.wipe.sceneItemTransform.width, 450);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+  const overlappingY = [0, (450*9/16 - 1)/1080, .2, .8];
+  await f.tick(state(overlappingY, 102), 102);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
 });
