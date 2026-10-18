@@ -3,7 +3,8 @@
 Approved 2026-10-18 for Shataku: combine adaptive sizing and overlap blending
 inside the existing fallback controller. No additional application or detector.
 
-- Use width 320..500, height width*9/16, top-left position retained.
+- Use width 450..600, height width*9/16, top-left position retained.
+  Retuned from320..500 at the user's request on2026-10-18.
 - Keep inverse confirmed BOX area sizing and the existing smoothing settings.
 - Resize first, then re-read OBS geometry to check the visible wipe boundary.
 - A confirmed overlap (16px margin) uses additive blending. This is the previous
@@ -12,7 +13,7 @@ inside the existing fallback controller. No additional application or detector.
 - Missing, stale or unsupported BOX geometry holds size and uses additive blend.
 - Full-screen fallback has priority and remains normal/opaque. Existing search
   trigger, three-second recovery wait and one-second transitions are unchanged.
-- The configured recovery entry is 320x180. Actual tracking can enlarge it to500.
+- The configured recovery entry is 450x253.125. Actual tracking can enlarge it to600.
 - State-file reads remain at500ms and the existing animation loop at up to10Hz.
 
 The source config remains opt-in. Production enables both `adaptive_wipe.enabled`
