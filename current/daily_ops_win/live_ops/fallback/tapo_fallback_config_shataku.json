@@ -61,6 +61,7 @@
     "mode": "opacity",
     "opacity_percent": 50,
     "fade_duration_ms": 600,
+    "require_min_width": true,
     "subject_source_name": "OBSBOT VC",
     "max_age_sec": 1.5,
     "restore_delay_sec": 1,

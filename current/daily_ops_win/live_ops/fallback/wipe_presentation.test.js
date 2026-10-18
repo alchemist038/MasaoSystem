@@ -17,6 +17,7 @@ function fixture(opacityMode = false) {
   config.overlap.mode = opacityMode ? "opacity" : "blend";
   config.overlap.opacityPercent = 50;
   config.overlap.fadeDurationMs = 0;
+  config.overlap.requireMinWidth = false;
   const wipe = { sourceName: "tapoc232", sceneItemId: 5, sceneItemEnabled: true,
     sceneItemBlendMode: NORMAL, sceneItemTransform: { ...transform, sourceWidth: 2880,
       sourceHeight: 1620, width: 320, height: 180, scaleX: 320/2880, scaleY: 180/1620 } };
@@ -364,5 +365,126 @@ test("fade dry run never writes and external filter values are re-synchronized",
   await f.tick(state(overlapping, 101.4), 101.4);
   assert.equal(f.obs.filters[0].filterSettings.opacity, .9);
   await f.tick(state(overlapping, 102.1), 102.1);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
+});
+
+function minimumFirstFixture(width = 600) {
+  const f = fixture(true);
+  f.config.adaptive = sizingOptions({ enabled: true, mode: "x_position", min_width: 450, max_width: 600 });
+  f.config.overlap.requireMinWidth = true;
+  f.config.overlap.fadeDurationMs = 600;
+  f.policies.adaptive = new PositionWipePolicy();
+  Object.assign(f.wipe.sceneItemTransform, {
+    width, height: width*9/16, scaleX: width/2880, scaleY: width/2880,
+  });
+  return f;
+}
+
+test("minimum-first waits for actual shrink completion before fading on overlap", async () => {
+  const f = minimumFirstFixture();
+  let minimumAt = null, shrinkingTicks = 0, fadingTicks = 0;
+  for (let i = 0; i < 70; i++) {
+    const now = 100+i/10;
+    const result = await f.tick(state(overlapping, now), now);
+    const width = f.wipe.sceneItemTransform.width;
+    const opacity = f.obs.filters[0].filterSettings.opacity;
+    if (width > 450.05) {
+      shrinkingTicks++;
+      assert.equal(result.overlap.minimumReady, false);
+      assert.equal(result.overlap.targetOpacityPercent, 100);
+      assert.equal(opacity, 1);
+    } else {
+      assert.equal(result.overlap.minimumReady, true);
+      if (minimumAt === null) { minimumAt = now; assert.equal(opacity, 1); }
+      if (opacity > .5 && opacity < 1) fadingTicks++;
+    }
+  }
+  assert.ok(shrinkingTicks > 5 && fadingTicks > 1);
+  assert.ok(minimumAt !== null);
+  assert.equal(f.wipe.sceneItemTransform.width, 450);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
+});
+
+test("minimum-first stays opaque when X sizing clears overlap before reaching minimum", async () => {
+  const f = minimumFirstFixture();
+  const box = [520/1920, 0, .6, .2];
+  let sawOverlap = false;
+  for (let i = 0; i < 70; i++) {
+    const now = 100+i/10;
+    const result = await f.tick(state(box, now), now);
+    sawOverlap ||= result.overlap.status === "overlap";
+    assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+  }
+  assert.equal(sawOverlap, true);
+  assert.ok(Math.abs(f.wipe.sceneItemTransform.width - 504) < 1e-6);
+});
+
+test("minimum-first preserves Y clear, clear delay and smooth return to opaque", async () => {
+  const f = minimumFirstFixture(450);
+  const below = [0, .6, .2, .9];
+  for (const now of [100, 100.3, 100.6]) {
+    await f.tick(state(below, now), now);
+    assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+  }
+  await f.tick(state(overlapping, 101), 101);
+  await f.tick(state(overlapping, 101.6), 101.6);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
+  await f.tick(state(below, 102), 102);
+  await f.tick(state(below, 102.9), 102.9);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
+  await f.tick(state(below, 103), 103);
+  await f.tick(state(below, 103.3), 103.3);
+  assert.ok(f.obs.filters[0].filterSettings.opacity > .5 && f.obs.filters[0].filterSettings.opacity < 1);
+  await f.tick(state(below, 103.6), 103.6);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+});
+
+test("minimum-first holds opaque for unknown size above minimum and honors dry run readback", async () => {
+  const f = minimumFirstFixture();
+  for (const now of [100, 100.5, 101]) {
+    const result = await f.tick(null, now);
+    assert.equal(result.adaptive.status, "hold");
+    assert.equal(result.overlap.minimumReady, false);
+    assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+  }
+  f.calls.length = 0;
+  const result = await f.tick(state(overlapping, 102), 102, "small", true);
+  assert.ok(result.adaptive.width < 600);
+  assert.equal(f.wipe.sceneItemTransform.width, 600);
+  assert.equal(result.overlap.minimumReady, false);
+  assert.equal(f.calls.filter(c => /^(Set|Create)/.test(c.type)).length, 0);
+  f.wipe.sceneItemTransform.rotation = 30;
+  await f.tick(state(overlapping, 103), 103);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+});
+
+test("minimum-first retains loss priority and safely reverses fade if width grows", async () => {
+  const f = minimumFirstFixture(450);
+  await f.tick(state(overlapping, 100), 100);
+  await f.tick(state(overlapping, 100.6), 100.6);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
+  await f.obs.request("SetSceneItemTransform", { sceneItemTransform: { scaleX: 600/2880, scaleY: 600/2880 } });
+  let result = await f.tick(state(clear, 101), 101);
+  assert.equal(result.overlap.targetOpacityPercent, 100);
+  await f.tick(state(clear, 101.3), 101.3);
+  assert.ok(f.obs.filters[0].filterSettings.opacity > .5);
+  await f.tick(state(clear, 101.6), 101.6);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+  f.config.transitionEnabled = false;
+  await applyModeToObs(f.obs, f.config, "large", false, () => {});
+  result = await f.tick(null, 102, "large");
+  assert.equal(result.status, "inactive");
+  assert.equal(f.wipe.sceneItemTransform.width, 1920);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+});
+
+test("minimum-first is enabled in the Shataku template while legacy mode remains available", async () => {
+  const config = readConfig(require("node:path").join(__dirname, "tapo_fallback_config_shataku.json"));
+  assert.equal(config.overlap.requireMinWidth, true);
+  const f = minimumFirstFixture();
+  f.config.overlap.requireMinWidth = false;
+  await f.tick(state(overlapping, 100), 100);
+  await f.tick(state(overlapping, 100.6), 100.6);
+  assert.ok(f.wipe.sceneItemTransform.width > 450.05);
   assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
 });

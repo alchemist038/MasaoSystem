@@ -13,7 +13,12 @@ inside the existing fallback controller. No additional application or detector.
   one continuous second with sufficient horizontal space; retain8px deadband.
   BOX Y never provides extra room for sizing.
 - Resize first, then re-read OBS geometry to check the visible wipe boundary.
-- A confirmed X/Y overlap uses50% opacity with normal blending. Horizontal
+  `overlap_transparency.require_min_width=true` keeps the wipe opaque until
+  its actual displayed width reaches450px (0.05px float tolerance), not just
+  its smoothing target. Only then may remaining overlap fade to50%. A shrink
+  that clears the BOX above450px never starts fading. Legacy configs default
+  this guard off. Leaving the minimum retargets opacity100% with the same fade.
+- At the minimum width, confirmed X/Y overlap uses50% with normal blending. Horizontal
   margin is16px; `overlap_transparency.vertical_margin_px=0` means separated
   Y ranges do not fade, even with a small gap. X overlap alone is insufficient.
   `overlap_transparency.mode=opacity` and `opacity_percent=50` control this;
@@ -25,9 +30,10 @@ inside the existing fallback controller. No additional application or detector.
   tick advances one step without sleeping or blocking the loss watchdog.
   Full-screen expansion, disabled control and other program scenes bypass
   the fade and restore100% immediately on their control tick.
-- Missing or unsupported geometry holds the inset size and uses50% opacity
-  during the loss grace period. Unsupported OBS transforms do not invalidate
-  otherwise fresh detector data; report geometry problems separately.
+- Missing subject geometry holds the inset size during the loss grace period;
+  its existing50% precaution is also gated on a verified minimum wipe width.
+  Unverifiable wipe geometry stays opaque. Unsupported OBS transforms do not
+  invalidate fresh detector data; report geometry problems separately.
 - With `box_loss.enabled=true`, the controller independently validates detection,
   normalized BOX coordinates and both state/observation timestamps. It does not
   depend on V7's `lost_stage`, `search` timing or BOX area. No valid BOX for1.5s,

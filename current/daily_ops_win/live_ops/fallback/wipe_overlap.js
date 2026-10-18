@@ -120,16 +120,20 @@ function overlapStatus(state, subject, wipe, now, options) {
 
 class OverlapPolicy {
   constructor() { this.opacityFade = new OpacityFade(); this.reset(); }
-  reset() { this.clearSince = null; this.lastNow = null; this.opacityFade.reset(); }
-  decide(status, now, restoreDelaySec) {
+  reset() { this.clearSince = null; this.lastNow = null; this.obstructed = false; this.opacityFade.reset(); }
+  decide(status, now, restoreDelaySec, requireObstruction = false) {
     if (this.lastNow !== null && now < this.lastNow) this.clearSince = null;
     this.lastNow = now;
     if (status !== "clear") {
       this.clearSince = null;
+      this.obstructed = true;
       return TRANSPARENT;
     }
+    if (requireObstruction && !this.obstructed) return NORMAL;
     if (this.clearSince === null) this.clearSince = now;
-    return now - this.clearSince >= restoreDelaySec ? NORMAL : TRANSPARENT;
+    if (now - this.clearSince < restoreDelaySec) return TRANSPARENT;
+    this.obstructed = false;
+    return NORMAL;
   }
 }
 
@@ -141,7 +145,13 @@ async function updateWipeBlend(obs, config, state, now, policy, dryRun, log) {
   const wipe = wipes[0];
   const subjects = sceneItems.filter(i => i.sourceName === options.subjectSourceName);
   const status = options.enabled ? overlapStatus(state, subjects.length === 1 ? subjects[0] : null, wipe, now, options) : "disabled";
-  const policyBlend = options.enabled ? policy.decide(status, now, options.restoreDelaySec) : config.wipeBlendMode;
+  // Gate on OBS readback, not the target width while shrink smoothing is running.
+  const rect = projectRect([0, 0, 1, 1], wipe.sceneItemTransform);
+  const minimumReady = !options.requireMinWidth || !!(config.adaptive?.enabled &&
+    finite(config.adaptive.minWidth) && wipe.sceneItemEnabled && !wipe.isGroup &&
+    rect && !rect.empty && rect.right - rect.left <= config.adaptive.minWidth + .05);
+  const policyBlend = options.enabled ? policy.decide(minimumReady ? status : "clear", now,
+    minimumReady ? options.restoreDelaySec : 0, options.requireMinWidth) : config.wipeBlendMode;
   const usesOpacity = options.mode === "opacity";
   const desired = usesOpacity ? NORMAL : policyBlend;
   const opacityPercent = usesOpacity && options.enabled && policyBlend === TRANSPARENT
@@ -156,7 +166,7 @@ async function updateWipeBlend(obs, config, state, now, policy, dryRun, log) {
     if (!dryRun) await obs.request("SetSceneItemBlendMode", { ...args, sceneItemBlendMode: desired });
     log(`${dryRun ? "dry-run" : "applied"} overlap: status=${status} blend=${desired}`);
   }
-  return { status, blend: desired, ...(usesOpacity ? {
+  return { status, minimumReady, blend: desired, ...(usesOpacity ? {
     opacityPercent: appliedOpacityPercent, targetOpacityPercent: opacityPercent } : {}) };
 }
 
