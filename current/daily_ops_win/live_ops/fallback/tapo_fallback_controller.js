@@ -476,6 +476,29 @@ function desiredMode(config, state, nowSec) {
   return null;
 }
 
+async function updateWipePresentation(obs, config, state, now, mode, policies, dryRun, log) {
+  if (mode !== "small" || config.manualOverride === "disabled") {
+    policies.overlap.reset();
+    policies.adaptive.reset();
+    return { status: "inactive" };
+  }
+  const result = {};
+  if (config.adaptive.enabled) {
+    result.adaptive = await updateAdaptiveWipe(obs, config, state, now,
+      policies.adaptive, dryRun, log);
+  } else {
+    policies.adaptive.reset();
+  }
+  // Re-read the applied size so overlap follows the visible wipe boundary.
+  if (config.overlap.enabled || !config.adaptive.enabled) {
+    result.overlap = await updateWipeBlend(obs, config, state, now,
+      policies.overlap, dryRun, log);
+  } else {
+    policies.overlap.reset();
+  }
+  return result;
+}
+
 async function main() {
   const args = parseArgs();
   let currentMode = null;
@@ -499,21 +522,14 @@ async function main() {
     if (!config.overlap.enabled && !config.adaptive.enabled && !overlapObs) return;
     try {
       if (!overlapObs) overlapObs = await connectObs();
-      if (config.adaptive.enabled) {
-        const now = Date.now() / 1000;
-        const result = await updateAdaptiveWipe(overlapObs, config, state, now,
-          adaptivePolicy, args.dryRun, log);
-        if (now - lastSizingLog >= 30) {
-          log(`adaptive: ${JSON.stringify(result)}`);
-          lastSizingLog = now;
-        }
-        overlapPolicy.reset();
-        return;
+      const now = Date.now() / 1000;
+      const result = await updateWipePresentation(overlapObs, config, state, now,
+        currentMode, { adaptive: adaptivePolicy, overlap: overlapPolicy }, args.dryRun, log);
+      if (result.adaptive && now - lastSizingLog >= 30) {
+        log(`wipe presentation: ${JSON.stringify(result)}`);
+        lastSizingLog = now;
       }
-      adaptivePolicy.reset();
-      await updateWipeBlend(overlapObs, config, state, Date.now() / 1000,
-        overlapPolicy, args.dryRun, log);
-      if (!config.overlap.enabled) {
+      if (!config.overlap.enabled && !config.adaptive.enabled) {
         overlapObs.close();
         overlapObs = null;
         overlapPolicy.reset();
@@ -598,4 +614,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { withObs, readConfig, desiredMode, transformForObs };
+module.exports = { withObs, readConfig, desiredMode, transformForObs, updateWipePresentation };

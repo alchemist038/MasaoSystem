@@ -1,5 +1,8 @@
 # Adaptive Opaque Wipe Trial
 
+Historical trial. The 2026-10-18 combined behavior is documented in
+`COMBINED_WIPE.md`; its enabled overlap policy now coexists with adaptive sizing.
+
 Approved 2026-09-27: inverse continuous bbox sizing replaces overlap blending.
 The tracked config is opt-in; enabling production needs explicit approval.
 

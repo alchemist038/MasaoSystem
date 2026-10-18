@@ -73,7 +73,7 @@ async function updateAdaptiveWipe(obs, config, state, now, policy, dryRun, log) 
   if (wipes.length !== 1) throw new Error("Expected exactly one adaptive wipe");
   const wipe = wipes[0];
   const target = { sceneName: config.targetScene, sceneItemId: wipe.sceneItemId };
-  if (wipe.sceneItemBlendMode !== NORMAL) {
+  if (!config.overlap?.enabled && wipe.sceneItemBlendMode !== NORMAL) {
     if (!dryRun) await obs.request("SetSceneItemBlendMode", { ...target, sceneItemBlendMode: NORMAL });
     log(`${dryRun ? "dry-run" : "applied"} adaptive blend: ${NORMAL}`);
   }

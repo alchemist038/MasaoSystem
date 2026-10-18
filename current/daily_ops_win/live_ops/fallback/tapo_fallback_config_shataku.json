@@ -38,8 +38,8 @@
   "wipe_blend_mode": "OBS_BLEND_NORMAL",
   "adaptive_wipe": {
     "enabled": false,
-    "min_width": 250,
-    "max_width": 640,
+    "min_width": 320,
+    "max_width": 500,
     "small_box_area": 0.05,
     "large_box_area": 0.25,
     "area_smoothing_sec": 1,
@@ -68,14 +68,14 @@
     "cropRight": 0,
     "cropToBounds": false,
     "cropTop": 0,
-    "height": 285,
+    "height": 180,
     "positionX": 0,
     "positionY": 0,
     "rotation": 0,
-    "scaleX": 0.176041662693024,
-    "scaleY": 0.175925925374031,
+    "scaleX": 0.1111111111111111,
+    "scaleY": 0.1111111111111111,
     "sourceHeight": 1620,
     "sourceWidth": 2880,
-    "width": 507
+    "width": 320
   }
 }

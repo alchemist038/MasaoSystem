@@ -1,5 +1,8 @@
 # Conditional Wipe Transparency Trial
 
+Historical trial. For the 2026-10-18 combined adaptive/overlap behavior, see
+`COMBINED_WIPE.md`. The earlier specification below is retained as history.
+
 Status: candidate, NOT DEPLOYED. Date: 2026-09-27.
 Fallback baseline: `f2b1513` on `main`.
 PTZ baseline: `0964fac` on `master` in the separate `masao_ptz` repository.
