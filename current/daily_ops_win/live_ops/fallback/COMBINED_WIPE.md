@@ -86,3 +86,12 @@ during a live stream; simulate outage/recovery in tests instead.
 This supersedes the area sizing and PTZ-stage trigger used earlier on October18,
 and the mutual-exclusion policy in the September27 trial documents.
 Those trial documents remain as historical evidence.
+
+## Open Usage Feedback
+
+[Issue #1: grooming/interaction fallback interrupts the close camera view](https://github.com/alchemist038/MasaoSystem/issues/1)
+records the2026-10-18 user feedback: overall operation feels good, but early
+full-screen fallback can hide interaction with the owner. Investigate normal
+versus grooming/interaction modes and tune PTZ behavior, loss timing, framing
+and recovery together. The cause and target settings are not established.
+This is a future tuning task; recording this issue does not change runtime.
