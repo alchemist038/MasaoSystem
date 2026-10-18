@@ -1,25 +1,43 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { updateWipePresentation, desiredMode, readConfig } = require("./tapo_fallback_controller");
+const { updateWipePresentation, desiredMode, readConfig, applyModeToObs } = require("./tapo_fallback_controller");
 const { sizingOptions, AdaptiveWipePolicy } = require("./adaptive_wipe");
 const { OverlapPolicy, NORMAL, TRANSPARENT } = require("./wipe_overlap");
 
 const transform = { sourceWidth: 1920, sourceHeight: 1080, width: 1920, height: 1080,
   positionX: 0, positionY: 0, scaleX: 1, scaleY: 1, cropLeft: 0, cropRight: 0,
   cropTop: 0, cropBottom: 0, rotation: 0, alignment: 5, boundsType: "OBS_BOUNDS_NONE" };
-function fixture() {
+function fixture(opacityMode = false) {
   const config = readConfig(require("node:path").join(__dirname, "tapo_fallback_config_shataku.json"));
   config.adaptive = sizingOptions({ enabled: true, min_width: 320, max_width: 500 });
   config.overlap.enabled = true;
+  config.overlap.mode = opacityMode ? "opacity" : "blend";
+  config.overlap.opacityPercent = 50;
   const wipe = { sourceName: "tapoc232", sceneItemId: 5, sceneItemEnabled: true,
     sceneItemBlendMode: NORMAL, sceneItemTransform: { ...transform, sourceWidth: 2880,
       sourceHeight: 1620, width: 320, height: 180, scaleX: 320/2880, scaleY: 180/1620 } };
   const subject = { sourceName: "OBSBOT VC", sceneItemId: 3, sceneItemEnabled: true,
     sceneItemTransform: { ...transform } };
   const calls = [];
-  const obs = { async request(type, data) {
+  const obs = { program: config.targetScene, filters: [], async request(type, data) {
     calls.push({ type, data });
+    if (type === "GetCurrentProgramScene") return { currentProgramSceneName: this.program };
+    if (type === "GetSourceFilterList") return { filters: structuredClone(this.filters) };
+    if (type === "CreateSourceFilter") {
+      this.filters.push({ filterName: data.filterName, filterKind: data.filterKind,
+        filterEnabled: true, filterSettings: { ...data.filterSettings } }); return {};
+    }
+    if (type === "SetSourceFilterSettings") {
+      Object.assign(this.filters.find(f => f.filterName === data.filterName).filterSettings, data.filterSettings);
+      return {};
+    }
+    if (type === "SetSourceFilterEnabled") {
+      this.filters.find(f => f.filterName === data.filterName).filterEnabled = data.filterEnabled;
+      return {};
+    }
+    if (type === "GetSceneItemTransform") return { sceneItemTransform: { ...wipe.sceneItemTransform } };
+    if (type === "SetSceneItemEnabled") { wipe.sceneItemEnabled = data.sceneItemEnabled; return {}; }
     if (type === "GetSceneItemList") return { sceneItems: structuredClone([subject, wipe]) };
     if (type === "GetVideoSettings") return { baseWidth: 1920, baseHeight: 1080 };
     if (type === "GetSceneItemBlendMode") return { sceneItemBlendMode: wipe.sceneItemBlendMode };
@@ -33,7 +51,7 @@ function fixture() {
     throw new Error("Unexpected OBS request: " + type);
   } };
   const policies = { adaptive: new AdaptiveWipePolicy(), overlap: new OverlapPolicy() };
-  return { config, wipe, subject, calls, policies,
+  return { config, wipe, subject, calls, policies, obs,
     tick(state, now, mode = "small", dryRun = false) {
       return updateWipePresentation(obs, config, state, now, mode, policies, dryRun, () => {});
     } };
@@ -121,4 +139,73 @@ test("combined dry run never writes or changes the actual wipe", async () => {
   assert.equal(f.calls.filter(c => c.type.startsWith("Set")).length, 0);
   assert.equal(f.wipe.sceneItemTransform.width, 320);
   assert.equal(f.wipe.sceneItemBlendMode, NORMAL);
+});
+
+test("opacity mode uses stable normal blend at50 percent, then100 after clear delay", async () => {
+  const f = fixture(true);
+  f.wipe.sceneItemBlendMode = TRANSPARENT;
+  for (const now of [100, 100.1, 100.2]) await f.tick(state(overlapping, now), now);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
+  assert.equal(f.wipe.sceneItemBlendMode, NORMAL);
+  assert.equal(f.calls.filter(c => c.type === "CreateSourceFilter").length, 1);
+  assert.equal(f.calls.filter(c => c.type === "SetSourceFilterSettings").length, 0);
+  await f.tick(state(clear, 101), 101);
+  await f.tick(state(clear, 101.9), 101.9);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
+  await f.tick(state(clear, 102), 102);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+});
+
+test("full-screen transition restores100 percent before enlarging the wipe", async () => {
+  const f = fixture(true);
+  await f.tick(state(overlapping, 100), 100);
+  f.config.transitionEnabled = false;
+  f.calls.length = 0;
+  await applyModeToObs(f.obs, f.config, "large", false, () => {});
+  const opacityWrite = f.calls.findIndex(c => c.type === "SetSourceFilterSettings" && c.data.filterSettings.opacity === 1);
+  const transformWrite = f.calls.findIndex(c => c.type === "SetSceneItemTransform");
+  assert.ok(opacityWrite >= 0 && opacityWrite < transformWrite);
+  assert.equal(f.wipe.sceneItemTransform.width, 1920);
+  assert.equal(f.wipe.sceneItemBlendMode, NORMAL);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+});
+
+test("shared source is opaque in other program scenes and after disabling control", async () => {
+  const f = fixture(true);
+  await f.tick(state(overlapping, 100), 100);
+  f.obs.program = "another scene";
+  assert.equal((await f.tick(state(overlapping, 101), 101)).status, "inactive_scene");
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+  f.obs.program = f.config.targetScene;
+  await f.tick(state(overlapping, 102), 102);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
+  f.config.enabled = false;
+  await f.tick(state(overlapping, 103), 103);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+});
+
+test("opacity options retain unrelated filters/settings, disable and honor dry run", async () => {
+  const f = fixture(true);
+  await f.tick(state(overlapping, 100), 100, "small", true);
+  assert.equal(f.obs.filters.length, 0);
+  assert.equal(f.calls.filter(c => /^(Set|Create)/.test(c.type)).length, 0);
+  await f.tick(state(overlapping, 101), 101);
+  f.obs.filters[0].filterSettings.contrast = .2;
+  f.obs.filters.push({ filterName: "User filter", filterKind: "other", filterSettings: { opacity: .7 } });
+  f.config.overlap.opacityPercent = 70;
+  await f.tick(state(overlapping, 102), 102);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .7);
+  assert.equal(f.obs.filters[0].filterSettings.contrast, .2);
+  assert.equal(f.obs.filters[1].filterSettings.opacity, .7);
+  f.config.overlap.enabled = false;
+  await f.tick(state(overlapping, 103), 103);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+});
+
+test("a managed filter name collision fails without changing user filters", async () => {
+  const f = fixture(true);
+  f.obs.filters.push({ filterName: "Masao Wipe Opacity", filterKind: "color_filter",
+    filterEnabled: true, filterSettings: { opacity: 80 } });
+  await assert.rejects(f.tick(state(overlapping, 100), 100), /another filter kind/);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 80);
 });

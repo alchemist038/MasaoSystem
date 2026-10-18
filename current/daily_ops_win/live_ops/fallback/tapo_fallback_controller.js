@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { OverlapPolicy, updateWipeBlend } = require("./wipe_overlap");
+const { OverlapPolicy, updateWipeBlend, setWipeOpacity } = require("./wipe_overlap");
 const { sizingOptions, AdaptiveWipePolicy, updateAdaptiveWipe } = require("./adaptive_wipe");
 
 const DEFAULT_CONFIG_PATH = path.join(__dirname, "tapo_fallback_config.json");
@@ -93,6 +93,8 @@ function readConfig(file) {
     largeBlendMode: blendModeFromConfig(config.large_blend_mode, "OBS_BLEND_NORMAL"),
     overlap: {
       enabled: overlap.enabled === true,
+      mode: overlap.mode === "opacity" ? "opacity" : "blend",
+      opacityPercent: Math.max(0, Math.min(100, numberFromConfig(overlap.opacity_percent, 50))),
       subjectSourceName: overlap.subject_source_name || "OBSBOT VC",
       maxAgeSec: Math.max(0.1, numberFromConfig(overlap.max_age_sec, 1.5)),
       restoreDelaySec: Math.max(0, numberFromConfig(overlap.restore_delay_sec, 1)),
@@ -402,7 +404,10 @@ async function applyTransformWithTransition(obs, config, sceneItemId, fromTransf
 }
 
 async function applyMode(config, mode, dryRun, log) {
-  await withObs(async (obs) => {
+  await withObs(obs => applyModeToObs(obs, config, mode, dryRun, log));
+}
+
+async function applyModeToObs(obs, config, mode, dryRun, log) {
     const item = await findSceneItem(obs, config.targetScene, config.sourceName);
     const transformResponse = await obs.request("GetSceneItemTransform", {
       sceneName: config.targetScene,
@@ -417,6 +422,8 @@ async function applyMode(config, mode, dryRun, log) {
     const nextBlendMode = mode === "large" ? config.largeBlendMode :
       config.adaptive.enabled ? "OBS_BLEND_NORMAL" : config.wipeBlendMode;
 
+    // Restore the shared source before any full-screen expansion or recovery.
+    await setWipeOpacity(obs, config, 100, dryRun, log);
     if (!dryRun) {
       await obs.request("SetSceneItemEnabled", {
         sceneName: config.targetScene,
@@ -449,7 +456,6 @@ async function applyMode(config, mode, dryRun, log) {
     } else {
       log(`dry-run blend: mode=${mode} blend=${nextBlendMode}`);
     }
-  });
 }
 
 function desiredMode(config, state, nowSec) {
@@ -477,10 +483,20 @@ function desiredMode(config, state, nowSec) {
 }
 
 async function updateWipePresentation(obs, config, state, now, mode, policies, dryRun, log) {
-  if (mode !== "small" || config.manualOverride === "disabled") {
+  if (mode !== "small" || config.manualOverride === "disabled" || config.enabled === false) {
     policies.overlap.reset();
     policies.adaptive.reset();
+    await setWipeOpacity(obs, config, 100, dryRun, log);
     return { status: "inactive" };
+  }
+  if (config.overlap.mode === "opacity") {
+    const program = await obs.request("GetCurrentProgramScene");
+    if (program.currentProgramSceneName !== config.targetScene) {
+      policies.overlap.reset();
+      policies.adaptive.reset();
+      await setWipeOpacity(obs, config, 100, dryRun, log);
+      return { status: "inactive_scene" };
+    }
   }
   const result = {};
   if (config.adaptive.enabled) {
@@ -490,7 +506,7 @@ async function updateWipePresentation(obs, config, state, now, mode, policies, d
     policies.adaptive.reset();
   }
   // Re-read the applied size so overlap follows the visible wipe boundary.
-  if (config.overlap.enabled || !config.adaptive.enabled) {
+  if (config.overlap.enabled || !config.adaptive.enabled || config.overlap.mode === "opacity") {
     result.overlap = await updateWipeBlend(obs, config, state, now,
       policies.overlap, dryRun, log);
   } else {
@@ -514,12 +530,13 @@ async function main() {
   let cachedState = null;
   let lastStateRead = 0;
   const checkOverlap = async (config, state) => {
-    if (currentMode !== "small" || config.manualOverride === "disabled") {
+    const usesOpacity = config.overlap.mode === "opacity";
+    if (!usesOpacity && (currentMode !== "small" || config.manualOverride === "disabled")) {
       overlapPolicy.reset();
       adaptivePolicy.reset();
       return;
     }
-    if (!config.overlap.enabled && !config.adaptive.enabled && !overlapObs) return;
+    if (!usesOpacity && !config.overlap.enabled && !config.adaptive.enabled && !overlapObs) return;
     try {
       if (!overlapObs) overlapObs = await connectObs();
       const now = Date.now() / 1000;
@@ -551,6 +568,7 @@ async function main() {
 
     try {
       if (!config.enabled) {
+        if (config.overlap.mode === "opacity") await checkOverlap(config, null);
         if (args.once) break;
         await sleep(intervalMs);
         continue;
@@ -614,4 +632,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { withObs, readConfig, desiredMode, transformForObs, updateWipePresentation };
+module.exports = { withObs, readConfig, desiredMode, transformForObs, updateWipePresentation, applyModeToObs };

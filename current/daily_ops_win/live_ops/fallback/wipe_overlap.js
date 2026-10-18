@@ -2,6 +2,35 @@
 
 const NORMAL = "OBS_BLEND_NORMAL";
 const TRANSPARENT = "OBS_BLEND_ADDITIVE";
+const OPACITY_FILTER = "Masao Wipe Opacity";
+const OPACITY_KIND = "color_filter_v2";
+
+async function setWipeOpacity(obs, config, percent, dryRun, log) {
+  if (config.overlap?.mode !== "opacity") return;
+  const target = { sourceName: config.sourceName, filterName: OPACITY_FILTER };
+  const { filters = [] } = await obs.request("GetSourceFilterList", { sourceName: config.sourceName });
+  const filter = filters.find(f => f.filterName === OPACITY_FILTER);
+  const opacity = Math.max(0, Math.min(100, percent)) / 100;
+  if (filter && filter.filterKind !== OPACITY_KIND) {
+    throw new Error("Managed opacity filter name is occupied by another filter kind");
+  }
+  if (!filter) {
+    if (!dryRun) await obs.request("CreateSourceFilter", {
+      ...target, filterKind: OPACITY_KIND, filterSettings: { opacity }
+    });
+    log(`${dryRun ? "dry-run" : "applied"} wipe opacity: ${percent}% (create)`);
+    return;
+  }
+  if (Math.abs((filter.filterSettings?.opacity ?? 1) - opacity) > .0001) {
+    if (!dryRun) await obs.request("SetSourceFilterSettings", {
+      ...target, filterSettings: { opacity }, overlay: true
+    });
+    log(`${dryRun ? "dry-run" : "applied"} wipe opacity: ${percent}%`);
+  }
+  if (!filter.filterEnabled && opacity < 1 && !dryRun) {
+    await obs.request("SetSourceFilterEnabled", { ...target, filterEnabled: true });
+  }
+}
 
 function finite(value) {
   return typeof value === "number" && Number.isFinite(value);
@@ -80,14 +109,20 @@ async function updateWipeBlend(obs, config, state, now, policy, dryRun, log) {
   const wipe = wipes[0];
   const subjects = sceneItems.filter(i => i.sourceName === options.subjectSourceName);
   const status = options.enabled ? overlapStatus(state, subjects.length === 1 ? subjects[0] : null, wipe, now, options) : "disabled";
-  const desired = options.enabled ? policy.decide(status, now, options.restoreDelaySec) : config.wipeBlendMode;
+  const policyBlend = options.enabled ? policy.decide(status, now, options.restoreDelaySec) : config.wipeBlendMode;
+  const usesOpacity = options.mode === "opacity";
+  const desired = usesOpacity ? NORMAL : policyBlend;
+  const opacityPercent = usesOpacity && options.enabled && policyBlend === TRANSPARENT
+    ? options.opacityPercent : 100;
+  await setWipeOpacity(obs, config, opacityPercent, dryRun, log);
   const args = { sceneName: config.targetScene, sceneItemId: wipe.sceneItemId };
   const actual = await obs.request("GetSceneItemBlendMode", args);
   if (actual.sceneItemBlendMode !== desired) {
     if (!dryRun) await obs.request("SetSceneItemBlendMode", { ...args, sceneItemBlendMode: desired });
     log(`${dryRun ? "dry-run" : "applied"} overlap: status=${status} blend=${desired}`);
   }
-  return { status, blend: desired };
+  return { status, blend: desired, ...(usesOpacity ? { opacityPercent } : {}) };
 }
 
-module.exports = { NORMAL, TRANSPARENT, projectRect, subjectRect, overlapStatus, OverlapPolicy, updateWipeBlend };
+module.exports = { NORMAL, TRANSPARENT, OPACITY_FILTER, projectRect, subjectRect,
+  overlapStatus, OverlapPolicy, updateWipeBlend, setWipeOpacity };

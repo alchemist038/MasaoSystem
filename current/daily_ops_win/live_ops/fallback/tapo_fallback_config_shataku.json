@@ -51,6 +51,8 @@
   },
   "overlap_transparency": {
     "enabled": false,
+    "mode": "opacity",
+    "opacity_percent": 50,
     "subject_source_name": "OBSBOT VC",
     "max_age_sec": 1.5,
     "restore_delay_sec": 1,
