@@ -1,6 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { OverlapPolicy, updateWipeBlend } = require("./wipe_overlap");
+const { sizingOptions, AdaptiveWipePolicy, updateAdaptiveWipe } = require("./adaptive_wipe");
 
 const DEFAULT_CONFIG_PATH = path.join(__dirname, "tapo_fallback_config.json");
 const DEFAULT_LOG_DIR = "C:\\Users\\alche\\Desktop\\OBS\\logs";
@@ -65,6 +67,7 @@ function blendModeFromConfig(value, fallback) {
 
 function readConfig(file) {
   const config = tryReadJsonFile(file) || {};
+  const overlap = config.overlap_transparency || {};
   return {
     enabled: config.enabled !== false,
     statePath: config.state_path || "C:\\masao_ptz\\state\\v7_tracking_state.json",
@@ -88,6 +91,14 @@ function readConfig(file) {
     largeTransform: config.large_transform || null,
     wipeBlendMode: blendModeFromConfig(config.wipe_blend_mode, "OBS_BLEND_NORMAL"),
     largeBlendMode: blendModeFromConfig(config.large_blend_mode, "OBS_BLEND_NORMAL"),
+    overlap: {
+      enabled: overlap.enabled === true,
+      subjectSourceName: overlap.subject_source_name || "OBSBOT VC",
+      maxAgeSec: Math.max(0.1, numberFromConfig(overlap.max_age_sec, 1.5)),
+      restoreDelaySec: Math.max(0, numberFromConfig(overlap.restore_delay_sec, 1)),
+      marginPx: Math.max(0, numberFromConfig(overlap.margin_px, 16)),
+    },
+    adaptive: sizingOptions(config.adaptive_wipe),
     logDir: config.log_dir || DEFAULT_LOG_DIR,
   };
 }
@@ -128,6 +139,11 @@ function sha256Base64(value) {
 
 function waitForMessage(ws) {
   return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      ws.close();
+      reject(new Error("OBS handshake timed out"));
+    }, 3000);
     const onMessage = (event) => {
       cleanup();
       resolve(JSON.parse(event.data.toString()));
@@ -141,6 +157,7 @@ function waitForMessage(ws) {
       reject(new Error("WebSocket closed before OBS responded."));
     };
     const cleanup = () => {
+      clearTimeout(timer);
       ws.removeEventListener("message", onMessage);
       ws.removeEventListener("error", onError);
       ws.removeEventListener("close", onClose);
@@ -156,8 +173,15 @@ async function connectObs() {
   const ws = new WebSocket(`ws://127.0.0.1:${config.port}`);
 
   await new Promise((resolve, reject) => {
-    ws.addEventListener("open", resolve, { once: true });
-    ws.addEventListener("error", (event) => reject(event.error || new Error("WebSocket open error")), { once: true });
+    const timer = setTimeout(() => {
+      ws.close();
+      reject(new Error("OBS connection timed out"));
+    }, 3000);
+    ws.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
+    ws.addEventListener("error", (event) => {
+      clearTimeout(timer);
+      reject(event.error || new Error("WebSocket open error"));
+    }, { once: true });
   });
 
   const hello = await waitForMessage(ws);
@@ -184,6 +208,7 @@ async function connectObs() {
     const pendingRequest = pending.get(message.d.requestId);
     if (!pendingRequest) return;
     pending.delete(message.d.requestId);
+    clearTimeout(pendingRequest.timer);
     const status = message.d.requestStatus || {};
     if (status.result) {
       pendingRequest.resolve(message.d.responseData || {});
@@ -193,7 +218,10 @@ async function connectObs() {
   });
 
   ws.addEventListener("close", () => {
-    for (const request of pending.values()) request.reject(new Error("OBS WebSocket closed."));
+    for (const request of pending.values()) {
+      clearTimeout(request.timer);
+      request.reject(new Error("OBS WebSocket closed."));
+    }
     pending.clear();
   });
 
@@ -202,8 +230,13 @@ async function connectObs() {
       const requestId = String(nextRequestId++);
       const payload = { op: 6, d: { requestType, requestId, requestData } };
       return new Promise((resolve, reject) => {
-        pending.set(requestId, { resolve, reject });
-        ws.send(JSON.stringify(payload));
+        const timer = setTimeout(() => {
+          pending.delete(requestId);
+          reject(new Error(`OBS request timed out: ${requestType}`));
+        }, 3000);
+        pending.set(requestId, { resolve, reject, timer });
+        try { ws.send(JSON.stringify(payload)); }
+        catch (error) { clearTimeout(timer); pending.delete(requestId); reject(error); }
       });
     },
     close() {
@@ -381,7 +414,8 @@ async function applyMode(config, mode, dryRun, log) {
       mode === "large"
         ? computeLargeTransform(config, currentTransform, videoSettings)
         : transformForObs(config.wipeTransform || currentTransform);
-    const nextBlendMode = mode === "large" ? config.largeBlendMode : config.wipeBlendMode;
+    const nextBlendMode = mode === "large" ? config.largeBlendMode :
+      config.adaptive.enabled ? "OBS_BLEND_NORMAL" : config.wipeBlendMode;
 
     if (!dryRun) {
       await obs.request("SetSceneItemEnabled", {
@@ -389,7 +423,7 @@ async function applyMode(config, mode, dryRun, log) {
         sceneItemId: item.sceneItemId,
         sceneItemEnabled: true,
       });
-      if (mode === "large") {
+      if (mode === "large" || config.adaptive.enabled) {
         await setSceneItemBlendMode(obs, config.targetScene, item.sceneItemId, nextBlendMode);
       }
     }
@@ -442,6 +476,29 @@ function desiredMode(config, state, nowSec) {
   return null;
 }
 
+async function updateWipePresentation(obs, config, state, now, mode, policies, dryRun, log) {
+  if (mode !== "small" || config.manualOverride === "disabled") {
+    policies.overlap.reset();
+    policies.adaptive.reset();
+    return { status: "inactive" };
+  }
+  const result = {};
+  if (config.adaptive.enabled) {
+    result.adaptive = await updateAdaptiveWipe(obs, config, state, now,
+      policies.adaptive, dryRun, log);
+  } else {
+    policies.adaptive.reset();
+  }
+  // Re-read the applied size so overlap follows the visible wipe boundary.
+  if (config.overlap.enabled || !config.adaptive.enabled) {
+    result.overlap = await updateWipeBlend(obs, config, state, now,
+      policies.overlap, dryRun, log);
+  } else {
+    policies.overlap.reset();
+  }
+  return result;
+}
+
 async function main() {
   const args = parseArgs();
   let currentMode = null;
@@ -450,11 +507,46 @@ async function main() {
   let lastErrorMessage = "";
   let lastMissingStateLog = 0;
   let log = makeLogger(DEFAULT_LOG_DIR);
+  let overlapObs = null;
+  const overlapPolicy = new OverlapPolicy();
+  const adaptivePolicy = new AdaptiveWipePolicy();
+  let lastSizingLog = 0;
+  let cachedState = null;
+  let lastStateRead = 0;
+  const checkOverlap = async (config, state) => {
+    if (currentMode !== "small" || config.manualOverride === "disabled") {
+      overlapPolicy.reset();
+      adaptivePolicy.reset();
+      return;
+    }
+    if (!config.overlap.enabled && !config.adaptive.enabled && !overlapObs) return;
+    try {
+      if (!overlapObs) overlapObs = await connectObs();
+      const now = Date.now() / 1000;
+      const result = await updateWipePresentation(overlapObs, config, state, now,
+        currentMode, { adaptive: adaptivePolicy, overlap: overlapPolicy }, args.dryRun, log);
+      if (result.adaptive && now - lastSizingLog >= 30) {
+        log(`wipe presentation: ${JSON.stringify(result)}`);
+        lastSizingLog = now;
+      }
+      if (!config.overlap.enabled && !config.adaptive.enabled) {
+        overlapObs.close();
+        overlapObs = null;
+        overlapPolicy.reset();
+      }
+    } catch (error) {
+      if (overlapObs) overlapObs.close();
+      overlapObs = null;
+      overlapPolicy.reset();
+      adaptivePolicy.reset();
+      throw error;
+    }
+  };
 
   do {
     const config = readConfig(args.configPath);
     log = makeLogger(config.logDir);
-    const intervalMs = args.intervalMs || config.pollIntervalMs;
+    const intervalMs = args.intervalMs || (config.adaptive.enabled ? 100 : config.pollIntervalMs);
     const nowSec = Date.now() / 1000;
 
     try {
@@ -464,7 +556,12 @@ async function main() {
         continue;
       }
 
-      const state = tryReadJsonFile(config.statePath);
+      // Animate at 10Hz without increasing reads of V7's atomic state file.
+      if (nowSec - lastStateRead >= Math.max(100, config.pollIntervalMs) / 1000) {
+        cachedState = tryReadJsonFile(config.statePath);
+        lastStateRead = nowSec;
+      }
+      const state = cachedState;
       if (!state && config.manualOverride === "auto" && nowSec - lastMissingStateLog > 30) {
         log(`waiting for V7 state: ${config.statePath}`);
         lastMissingStateLog = nowSec;
@@ -473,6 +570,7 @@ async function main() {
       const mode = desiredMode(config, state, nowSec);
       if (!mode) {
         pendingMode = null;
+        await checkOverlap(config, state);
         if (args.once) break;
         await sleep(intervalMs);
         continue;
@@ -489,7 +587,10 @@ async function main() {
       if (nowSec - pendingSince >= waitSec && currentMode !== mode) {
         await applyMode(config, mode, args.dryRun, log);
         currentMode = mode;
+        overlapPolicy.reset();
+        adaptivePolicy.reset();
       }
+      await checkOverlap(config, state);
       lastErrorMessage = "";
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
@@ -503,9 +604,14 @@ async function main() {
     if (args.once) break;
     await sleep(intervalMs);
   } while (true);
+  if (overlapObs) overlapObs.close();
 }
 
-main().catch((error) => {
-  console.error(error && error.stack ? error.stack : error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error && error.stack ? error.stack : error);
+    process.exit(1);
+  });
+}
+
+module.exports = { withObs, readConfig, desiredMode, transformForObs, updateWipePresentation };
