@@ -5,31 +5,56 @@ const TRANSPARENT = "OBS_BLEND_ADDITIVE";
 const OPACITY_FILTER = "Masao Wipe Opacity";
 const OPACITY_KIND = "color_filter_v2";
 
-async function setWipeOpacity(obs, config, percent, dryRun, log) {
+class OpacityFade {
+  constructor() { this.reset(); }
+  reset() { this.target = null; this.lastNow = null; this.lastValue = null; }
+  step(target, actual, now, durationSec) {
+    if (!(durationSec > 0)) { this.reset(); return target; }
+    if (target !== this.target || this.lastNow === null || now < this.lastNow ||
+        Math.abs(actual - this.lastValue) > .001) {
+      this.from = actual;
+      this.target = target;
+      this.startedAt = now;
+    }
+    this.lastNow = now;
+    const t = Math.max(0, Math.min(1, (now - this.startedAt) / durationSec));
+    const eased = t * t * (3 - 2 * t);
+    this.lastValue = this.from + (target - this.from) * eased;
+    return this.lastValue;
+  }
+}
+
+async function setWipeOpacity(obs, config, percent, dryRun, log, transition = null) {
   if (config.overlap?.mode !== "opacity") return;
   const target = { sourceName: config.sourceName, filterName: OPACITY_FILTER };
   const { filters = [] } = await obs.request("GetSourceFilterList", { sourceName: config.sourceName });
   const filter = filters.find(f => f.filterName === OPACITY_FILTER);
-  const opacity = Math.max(0, Math.min(100, percent)) / 100;
+  const targetOpacity = Math.max(0, Math.min(100, percent)) / 100;
   if (filter && filter.filterKind !== OPACITY_KIND) {
     throw new Error("Managed opacity filter name is occupied by another filter kind");
   }
+  const actual = filter?.filterEnabled ? (filter.filterSettings?.opacity ?? 1) : 1;
+  // One interpolation step per control tick; never sleep or block loss detection.
+  const opacity = transition ? transition.fade.step(targetOpacity, actual,
+    transition.now, transition.durationSec) : targetOpacity;
+  const description = `${(opacity * 100).toFixed(1)}% (target ${percent}%)`;
   if (!filter) {
     if (!dryRun) await obs.request("CreateSourceFilter", {
       ...target, filterKind: OPACITY_KIND, filterSettings: { opacity }
     });
-    log(`${dryRun ? "dry-run" : "applied"} wipe opacity: ${percent}% (create)`);
-    return;
+    log(`${dryRun ? "dry-run" : "applied"} wipe opacity: ${description} (create)`);
+    return opacity * 100;
   }
   if (Math.abs((filter.filterSettings?.opacity ?? 1) - opacity) > .0001) {
     if (!dryRun) await obs.request("SetSourceFilterSettings", {
       ...target, filterSettings: { opacity }, overlay: true
     });
-    log(`${dryRun ? "dry-run" : "applied"} wipe opacity: ${percent}%`);
+    log(`${dryRun ? "dry-run" : "applied"} wipe opacity: ${description}`);
   }
   if (!filter.filterEnabled && opacity < 1 && !dryRun) {
     await obs.request("SetSourceFilterEnabled", { ...target, filterEnabled: true });
   }
+  return opacity * 100;
 }
 
 function finite(value) {
@@ -94,8 +119,8 @@ function overlapStatus(state, subject, wipe, now, options) {
 }
 
 class OverlapPolicy {
-  constructor() { this.reset(); }
-  reset() { this.clearSince = null; this.lastNow = null; }
+  constructor() { this.opacityFade = new OpacityFade(); this.reset(); }
+  reset() { this.clearSince = null; this.lastNow = null; this.opacityFade.reset(); }
   decide(status, now, restoreDelaySec) {
     if (this.lastNow !== null && now < this.lastNow) this.clearSince = null;
     this.lastNow = now;
@@ -121,15 +146,19 @@ async function updateWipeBlend(obs, config, state, now, policy, dryRun, log) {
   const desired = usesOpacity ? NORMAL : policyBlend;
   const opacityPercent = usesOpacity && options.enabled && policyBlend === TRANSPARENT
     ? options.opacityPercent : 100;
-  await setWipeOpacity(obs, config, opacityPercent, dryRun, log);
+  const transition = usesOpacity && options.enabled && options.fadeDurationMs > 0
+    ? { fade: policy.opacityFade, now, durationSec: options.fadeDurationMs / 1000 } : null;
+  if (!transition) policy.opacityFade.reset();
+  const appliedOpacityPercent = await setWipeOpacity(obs, config, opacityPercent, dryRun, log, transition);
   const args = { sceneName: config.targetScene, sceneItemId: wipe.sceneItemId };
   const actual = await obs.request("GetSceneItemBlendMode", args);
   if (actual.sceneItemBlendMode !== desired) {
     if (!dryRun) await obs.request("SetSceneItemBlendMode", { ...args, sceneItemBlendMode: desired });
     log(`${dryRun ? "dry-run" : "applied"} overlap: status=${status} blend=${desired}`);
   }
-  return { status, blend: desired, ...(usesOpacity ? { opacityPercent } : {}) };
+  return { status, blend: desired, ...(usesOpacity ? {
+    opacityPercent: appliedOpacityPercent, targetOpacityPercent: opacityPercent } : {}) };
 }
 
 module.exports = { NORMAL, TRANSPARENT, OPACITY_FILTER, projectRect, detectionBox, subjectRect,
-  overlapStatus, OverlapPolicy, updateWipeBlend, setWipeOpacity };
+  overlapStatus, OverlapPolicy, OpacityFade, updateWipeBlend, setWipeOpacity };

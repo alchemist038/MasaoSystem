@@ -16,6 +16,7 @@ function fixture(opacityMode = false) {
   config.overlap.enabled = true;
   config.overlap.mode = opacityMode ? "opacity" : "blend";
   config.overlap.opacityPercent = 50;
+  config.overlap.fadeDurationMs = 0;
   const wipe = { sourceName: "tapoc232", sceneItemId: 5, sceneItemEnabled: true,
     sceneItemBlendMode: NORMAL, sceneItemTransform: { ...transform, sourceWidth: 2880,
       sourceHeight: 1620, width: 320, height: 180, scaleX: 320/2880, scaleY: 180/1620 } };
@@ -285,5 +286,83 @@ test("even a small positive Y gap does not fade the X-position wipe", async () =
   assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
   const overlappingY = [0, (450*9/16 - 1)/1080, .2, .8];
   await f.tick(state(overlappingY, 102), 102);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
+});
+
+test("opacity fades both ways without changing the clear delay or blocking ticks", async () => {
+  const f = fixture(true);
+  f.config.overlap.fadeDurationMs = 600;
+  const values = [];
+  for (const now of [100, 100.1, 100.2, 100.3, 100.4, 100.5, 100.6]) {
+    await f.tick(state(overlapping, now), now);
+    values.push(f.obs.filters[0].filterSettings.opacity);
+  }
+  assert.equal(values[0], 1);
+  assert.equal(values.at(-1), .5);
+  assert.ok(values.slice(1).every((v, i) => v < values[i]));
+  assert.ok(Math.abs(values[3] - .75) < 1e-10);
+  await f.tick(state(clear, 101), 101);
+  await f.tick(state(clear, 101.9), 101.9);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
+  await f.tick(state(clear, 102), 102);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
+  await f.tick(state(clear, 102.3), 102.3);
+  assert.ok(Math.abs(f.obs.filters[0].filterSettings.opacity - .75) < 1e-10);
+  await f.tick(state(clear, 102.6), 102.6);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+  const writes = f.calls.filter(c => c.type === "SetSourceFilterSettings").length;
+  await f.tick(state(clear, 103), 103);
+  assert.equal(f.calls.filter(c => c.type === "SetSourceFilterSettings").length, writes);
+});
+
+test("a reversed opacity fade starts at the displayed value, not an endpoint", async () => {
+  const f = fixture(true);
+  f.config.overlap.fadeDurationMs = 600;
+  f.config.overlap.restoreDelaySec = 0;
+  await f.tick(state(overlapping, 100), 100);
+  await f.tick(state(overlapping, 100.3), 100.3);
+  const halfway = f.obs.filters[0].filterSettings.opacity;
+  await f.tick(state(clear, 100.3), 100.3);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, halfway);
+  await f.tick(state(clear, 100.6), 100.6);
+  assert.ok(f.obs.filters[0].filterSettings.opacity > halfway);
+  await f.tick(state(clear, 101), 101);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+});
+
+test("full-screen safety, other scenes and disable interrupt an in-progress fade", async () => {
+  for (const action of ["full", "scene", "disable"]) {
+    const f = fixture(true);
+    f.config.overlap.fadeDurationMs = 600;
+    await f.tick(state(overlapping, 100), 100);
+    await f.tick(state(overlapping, 100.3), 100.3);
+    assert.ok(f.obs.filters[0].filterSettings.opacity < 1);
+    if (action === "full") {
+      f.config.transitionEnabled = false;
+      await applyModeToObs(f.obs, f.config, "large", false, () => {});
+      await f.tick(state(overlapping, 100.4), 100.4, "large");
+    } else {
+      if (action === "scene") f.obs.program = "other";
+      if (action === "disable") f.config.overlap.enabled = false;
+      await f.tick(state(overlapping, 100.4), 100.4);
+    }
+    assert.equal(f.obs.filters[0].filterSettings.opacity, 1);
+    assert.equal(f.policies.overlap.opacityFade.target, null);
+  }
+});
+
+test("fade dry run never writes and external filter values are re-synchronized", async () => {
+  const f = fixture(true);
+  f.config.overlap.fadeDurationMs = 600;
+  await f.tick(state(overlapping, 100), 100, "small", true);
+  await f.tick(state(overlapping, 100.3), 100.3, "small", true);
+  assert.equal(f.calls.filter(c => /^(Set|Create)/.test(c.type)).length, 0);
+  f.policies.overlap.reset();
+  await f.tick(state(overlapping, 101), 101);
+  await f.tick(state(overlapping, 101.3), 101.3);
+  f.obs.filters[0].filterSettings.opacity = .9;
+  await f.tick(state(overlapping, 101.4), 101.4);
+  assert.equal(f.obs.filters[0].filterSettings.opacity, .9);
+  await f.tick(state(overlapping, 102.1), 102.1);
   assert.equal(f.obs.filters[0].filterSettings.opacity, .5);
 });

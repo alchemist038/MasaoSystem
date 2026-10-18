@@ -102,6 +102,7 @@ function readConfig(file) {
       enabled: overlap.enabled === true,
       mode: overlap.mode === "opacity" ? "opacity" : "blend",
       opacityPercent: Math.max(0, Math.min(100, numberFromConfig(overlap.opacity_percent, 50))),
+      fadeDurationMs: Math.max(0, Math.min(5000, numberFromConfig(overlap.fade_duration_ms, 0))),
       subjectSourceName: overlap.subject_source_name || "OBSBOT VC",
       maxAgeSec: Math.max(0.1, numberFromConfig(overlap.max_age_sec, 1.5)),
       restoreDelaySec: Math.max(0, numberFromConfig(overlap.restore_delay_sec, 1)),

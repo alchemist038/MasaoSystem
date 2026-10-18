@@ -18,7 +18,13 @@ inside the existing fallback controller. No additional application or detector.
   Y ranges do not fade, even with a small gap. X overlap alone is insufficient.
   `overlap_transparency.mode=opacity` and `opacity_percent=50` control this;
   the percentage is clamped to0..100. Legacy `mode=blend` retains additive mode.
-- Continuous clear geometry for one second restores100% opacity.
+- Opacity changes use a0.6s smoothstep fade in both directions, controlled by
+  `overlap_transparency.fade_duration_ms=600` (0 disables fading). Continuous
+  clear geometry must still last one second before fading back to100%.
+  Reversals start from the currently displayed value. Each existing control
+  tick advances one step without sleeping or blocking the loss watchdog.
+  Full-screen expansion, disabled control and other program scenes bypass
+  the fade and restore100% immediately on their control tick.
 - Missing or unsupported geometry holds the inset size and uses50% opacity
   during the loss grace period. Unsupported OBS transforms do not invalidate
   otherwise fresh detector data; report geometry problems separately.
